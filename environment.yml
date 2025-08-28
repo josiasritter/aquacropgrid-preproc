@@ -1,0 +1,17 @@
+name: aquacropgrid-preproc
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+  - numpy
+  - scipy
+  - xarray
+  - shapely
+  - requests
+  - geopandas
+  - rasterio
+  - pandas
+  - conda-forge::cdsapi
+  - netcdf4
+  - conda-forge::rioxarray
+  - owslib
