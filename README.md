@@ -7,13 +7,13 @@ Conda: You'll need either Miniconda or Anaconda installed. Miniconda is generall
 
 
 **Steps to download and preprocess input datasets from global data sources (climate, soil, crop areas, planting and harvesting calendars)**
-1. Go to Copernicus Climate Data Store website (https://cds.climate.copernicus.eu/)
+1. Go to Copernicus Climate Data Store website (https://cds.climate.copernicus.eu/):
   - Create a CDS account (register)
   - Access your API Token (Your profile -> API Token). You will need the token as input argument for running the script (step 5 below)
   - Accept “Terms of use” at the bottom of the following two pages:
       - ERA5: https://cds.climate.copernicus.eu/datasets/derived-era5-single-levels-daily-statistics?tab=download
       - ERA5-Land https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land?tab=download
-2. Clone this code Repository
+2. Clone this repository:
   - From command line (recommended), clone this repository to your local machine using Git (make sure you have Git installed on your system; you can download it from git-scm.com):
       - git clone https://github.com/josiasritter/aquacropgrid-preproc 
   - Alternatively, manually download this repository to the desired location on your computer
@@ -22,6 +22,6 @@ Conda: You'll need either Miniconda or Anaconda installed. Miniconda is generall
 4. Create a new conda environment and install the required packages:
       - conda env create -f environment.yml
       - conda activate aquacropgrid-preproc
-5. Run script “preproc_main.py”
+5. Run script “preproc_main.py”:
   - Manually adjust the input arguments at the top of the script and save the changes
   - From command line: python preproc_main.py
