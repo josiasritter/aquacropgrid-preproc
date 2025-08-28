@@ -23,5 +23,5 @@ Conda: You'll need either Miniconda or Anaconda installed. Miniconda is generall
       - conda env create -f environment.yml
       - conda activate aquacropgrid-preproc
 5. Run script “preproc_main.py”
-  - First, manually adjust the input arguments at the top of the script and save the changes (the script will later be refactored into a Python function that accepts these input arguments)
+  - Manually adjust the input arguments at the bottom of the script and save the changes
   - From command line: python preproc_main.py
