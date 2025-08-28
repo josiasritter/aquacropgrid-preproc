@@ -17,11 +17,11 @@ Conda: You'll need either Miniconda or Anaconda installed. Miniconda is generall
   - From command line (recommended), clone this repository to your local machine using Git (make sure you have Git installed on your system; you can download it from git-scm.com):
       - git clone https://github.com/josiasritter/aquacropgrid_dev.git
   - Alternatively, manually download this repository to the desired location on your computer
-3. Navigate your current working directory to the newly created project directory:
+3. Navigate working directory to the newly created project directory:
       - cd aquacropgrid-preproc
 4. Create a new conda environment and install the required packages:
       - conda env create -f environment.yml
       - conda activate aquacropgrid-preproc
 5. Run script “preproc_main.py”
   - First, manually adjust the input arguments at the top of the script and save the changes (the script will later be refactored into a Python function that accepts these input arguments)
-  - Type into command line: python preproc_main.py
+  - From command line: python preproc_main.py
