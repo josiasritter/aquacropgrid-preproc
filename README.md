@@ -15,7 +15,7 @@ Conda: You'll need either Miniconda or Anaconda installed. Miniconda is generall
       - ERA5-Land https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land?tab=download
 2. Clone this code Repository
   - From command line (recommended), clone this repository to your local machine using Git (make sure you have Git installed on your system; you can download it from git-scm.com):
-      - git clone https://github.com/josiasritter/aquacropgrid_dev.git
+      - git clone https://github.com/josiasritter/aquacropgrid-preproc 
   - Alternatively, manually download this repository to the desired location on your computer
 3. Navigate working directory to the newly created project directory:
       - cd aquacropgrid-preproc
