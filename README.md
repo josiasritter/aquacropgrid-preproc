@@ -1,4 +1,4 @@
-# aquacropgrid_preproc
+# aquacropgrid-preproc
 This repository is work-in-progress for developing code to run the Python library AquaCrop-OSPy in gridded format. Follow these steps to set up the project locally on your machine.
 
 **Prerequisites**
