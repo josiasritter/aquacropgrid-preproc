@@ -18,9 +18,9 @@ from preproc_tools import basegrid
 ## INPUT ARGUMENTS. REPLACE THESE WITH YOUR OWN VALUES
 workingdirectory = os.getcwd()   # your home directory
 domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
-start_year = 2008
-end_year = 2010
-api_token = 'XXX'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
+start_year = 2014
+end_year = 2015
+api_token = 'xx'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
 
 ##
 def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cell_resolution=0.05, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate']):
@@ -29,6 +29,7 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
     # Creat template raster file from domain shape for all other datasets to align
     templategrid_path = os.path.join(workingdirectory, 'template_grid.nc')
     to_match, bounds = basegrid(domain_path, cell_resolution, templategrid_path)
+
 
     # Download and preprocess soil data from ISRIC Soilgrids
     if 'soil' in preprocess:
@@ -45,7 +46,7 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
 
     # Download and preprocess crop calendar from GGCMI (https://zenodo.org/records/5062513)
     if 'cropcalendar' in preprocess:
-        from cropcalendar import cropcalendar
+        from cropcalendar_module import cropcalendar 
         cropcalendar(domain_shape_path, workingdirectory, templategrid_path)
 
     # Download and preprocess climate data and initial soil moisture from ERA5 and ERA5-Land
