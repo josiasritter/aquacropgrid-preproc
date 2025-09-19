@@ -82,8 +82,9 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
 
         print(cropID, technique)
 
+        
         src = xr.load_dataset(layer)
-        src_proj = src.rio.reproject_match(to_match, resampling=Resampling.average) # changed from nearest-neighbor to area-weighted resampling to reduce distortions
+        src_proj = src.rio.reproject_match(to_match, resampling=Resampling.average) # changed from nearest-neighbor to area-weighted resampling to reduce distortions 
         src_clip = src_proj.rio.clip(mask.geometry.apply(mapping))
 
         # Rename variables from FAO crop ID to crop strings used by AquaCrop
