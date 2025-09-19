@@ -14,8 +14,10 @@ def soil(domain_path, res, basepath):
     ## Bounds from shapefile
     mask = gpd.read_file(domain_path)
     xmin, ymin, xmax, ymax = mask.total_bounds # in lat/lon
-    xmin, ymin = np.floor(xmin * (1/res)) / (1/res) , np.floor(ymin * (1/res)) / (1/res) # round bounds down to cell resolution
-    xmax, ymax = np.ceil(xmax * (1/res)) / (1/res) , np.ceil(ymax * (1/res)) / (1/res) # round upper bounds up to cell resolution
+    xmin = float(np.floor(xmin * (1/res)) / (1/res)) # round bounds down to cell resolution
+    ymin = float(np.floor(ymin * (1/res)) / (1/res)) # round bounds down to cell resolution
+    xmax = float(np.ceil(xmax * (1/res)) / (1/res)) # round upper bounds up to cell resolution
+    ymax = float(np.ceil(ymax * (1/res)) / (1/res)) # round upper bounds up to cell resolution
 
     w = round((xmax-xmin)/res)
     h = round((ymax-ymin)/res)
@@ -54,26 +56,41 @@ def soil(domain_path, res, basepath):
                 height= h,
                 output=  outfile)
 
-    ## Convert soil layers to mosaics for each depth layer
 
+
+
+
+
+        ## Convert soil layers to mosaics for each depth layer
+    print("Converting soil layers to .nc files")
     search_terms = ['*0-5*.tif', '*5-15*.tif', '*15-30*.tif', '*30-60*.tif', '*60-100*.tif', '*100-200*.tif'] # search files of different soil types
-
+    
     for depth in search_terms:
+        target_dir = makedirs(basepath, 'processed', '')
+        targetfile = os.path.join(target_dir, 'soil_' + depth[1:-5] + '.nc')
+    
+        # Skip processing if file already exists
+        if os.path.isfile(targetfile):
+            print(f" Skipping {targetfile}, already exists.")
+            continue
+    
         file_to_mosaic = []
         path = os.path.join(basepath, 'rawdata', 'soilgrids', depth)
         ncs = glob.glob(path)
+    
         for layer in ncs:
             src = xr.open_dataset(layer)
-
+    
             # Rename bands as soil type, needs to be adjusted based on the data
-            filename = layer.split('/')[-1]
+            filename = os.path.basename(layer)
             soilname = filename.split('_')[0]
             src = src.rename({'band_data': soilname})
-
+    
             file_to_mosaic.append(src)
-
+    
         # Merge rasters
         mosaic = xr.merge(file_to_mosaic)
+    
 
         # Convert clay, silt, and sand from (g/kg) to %.
         mosaic['Clay'] = mosaic.clay / 10
