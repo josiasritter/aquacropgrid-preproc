@@ -1,19 +1,20 @@
 # IMPORT LIBRARIES
 
 import xarray as xr
-#import rioxarray as rio
 from rasterio.warp import Resampling
 import numpy as np
 #from scipy.ndimage import convolve
 import pandas as pd
 import geopandas as gpd
 import os
-from shapely.geometry import mapping
 import glob
 import time
 import requests
 from zipfile import ZipFile
 import pdb # pdb.set_trace()
+
+import rioxarray
+from shapely.geometry import mapping, box
 
 ## Download functions
 
@@ -82,10 +83,10 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
 
         print(cropID, technique)
 
-        
         src = xr.load_dataset(layer)
         src_proj = src.rio.reproject_match(to_match, resampling=Resampling.average) # changed from nearest-neighbor to area-weighted resampling to reduce distortions 
-        src_clip = src_proj.rio.clip(mask.geometry.apply(mapping))
+        #src_clip = src_proj.rio.clip(mask.geometry.apply(mapping))
+        src_clip = safe_clip(src_proj, mask)
 
         # Rename variables from FAO crop ID to crop strings used by AquaCrop
         layername_base = crop_dict.get(cropID) + '_' + tech_dict.get(technique)
@@ -147,6 +148,8 @@ def preproc_era5(src, variable, yearlist, basepath, to_match):
             src = src.assign_coords(valid_time=new_dates)  # Assign adjusted timestamps back to the dataset
             src = src.drop_vars('expver')
         src[variable] = src[variable].where(src[variable] >= 0, 0)  # Set negative precipitation and evaporation values to 0.
+    if variable in ['InitSoilwater']:
+        src = src.drop_vars(['expver','number'])
 
     # Fill missing values in data variable(s)
     import scipy.ndimage as ndi
@@ -247,3 +250,61 @@ def makedirs(basepath, level1, level2):
     if not os.path.exists(level2_dir):
         os.mkdir(level2_dir)
     return level2_dir
+
+
+def safe_clip(src, mask):
+    """
+    Clip a raster (src) using geometries from mask, skipping polygons
+    that fall entirely in nodata regions or outside the raster extent.
+
+    Parameters
+    ----------
+    src : rioxarray.DataArray
+        The source raster opened with rioxarray.
+    mask : geopandas.GeoDataFrame
+        Polygon(s) to clip with. Can be MultiPolygon.
+
+    Returns
+    -------
+    xarray.DataArray
+        Clipped raster with same CRS and structure as src.
+    """
+    # Ensure CRS match
+    if mask.crs != src.rio.crs:
+        mask = mask.to_crs(src.rio.crs)
+
+    # Explode multipolygons
+    mask_exploded = mask.explode(ignore_index=True)
+
+    # Get raster bounds as shapely box
+    raster_bounds = box(*src.rio.bounds())
+
+    valid_clips = []
+
+    for i, geom in enumerate(mask_exploded.geometry):
+        # Skip polygons completely outside raster extent
+        if not geom.intersects(raster_bounds):
+            continue
+        try:
+            clipped = src.rio.clip([mapping(geom)], src.rio.crs, drop=True)
+            # Only keep if it actually contains data
+            if clipped.notnull().any():
+                valid_clips.append(clipped)
+        except rioxarray.exceptions.NoDataInBounds:
+            continue
+
+    # If no valid clips, return empty raster with same structure
+    if not valid_clips:
+        print("Warning: no valid polygons contained data.")
+        empty = src.copy(deep=True)
+        empty[:] = src.rio.nodata
+        return empty
+
+    # Merge the valid clipped parts into one raster
+    combined = xr.concat(valid_clips, dim="band").max(dim="band")
+
+    # Preserve metadata & CRS
+    combined.rio.write_crs(src.rio.crs, inplace=True)
+    combined.attrs.update(src.attrs)
+
+    return combined

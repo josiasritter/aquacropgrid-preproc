@@ -56,7 +56,8 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
 
         src = xr.open_dataset(layer, decode_timedelta=False)       
         src = ensure_xy_dims(src)
-        src = src.drop_vars(['growing_season_length', 'data_source_used'])
+        #src = src.drop_vars(['growing_season_length', 'data_source_used'])
+        src = src.drop_vars(['maturity_day', 'data_source_used'])
         src.rio.write_crs(4326, inplace=True)
 
         # Reproject and clip to model domain
@@ -66,11 +67,13 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
         # Rename variables from FAO crop ID to crop strings used by AquaCrop
         layername_base = crop_dict.get(cropID) + '_' + technique
         src_clip[layername_base + '_planting'] = src_clip['planting_day']
-        src_clip[layername_base + '_harvest'] = src_clip['maturity_day']
+        #src_clip[layername_base + '_harvest'] = src_clip['maturity_day']
+        src_clip[layername_base + '_growing_season_length'] = src_clip['growing_season_length']
 
         # Select relevant data variables for merging
         file_to_mosaic.append(src_clip[layername_base + '_planting'])
-        file_to_mosaic.append(src_clip[layername_base + '_harvest'])
+        #file_to_mosaic.append(src_clip[layername_base + '_harvest'])
+        file_to_mosaic.append(src_clip[layername_base + '_growing_season_length'])
 
     # Merge data into one file
     src_mosaic = xr.merge(file_to_mosaic)

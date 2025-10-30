@@ -57,10 +57,6 @@ def soil(domain_path, res, basepath):
                 output=  outfile)
 
 
-
-
-
-
         ## Convert soil layers to mosaics for each depth layer
     print("Converting soil layers to .nc files")
     search_terms = ['*0-5*.tif', '*5-15*.tif', '*15-30*.tif', '*30-60*.tif', '*60-100*.tif', '*100-200*.tif'] # search files of different soil types
