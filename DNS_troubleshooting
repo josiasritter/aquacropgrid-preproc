@@ -1,0 +1,25 @@
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#                                                                           #
+#  If you encounter 'NameResolutionError' when downloading climate data     #
+# from cds.climate.copernicus.eu, add the force_resolve() function below    #
+# to the climate.py around line 34 (before the cdsapi.Client() call),       #
+# with the correct IP (use 'nslookup cds.copernicus.eu' in PowerShell)      #
+#                                                                           #
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+import socket
+
+def force_resolve(ip, hostname="cds.climate.copernicus.eu"):
+    """
+    Force a specific hostname to resolve to a given IP address
+    inside Python, without touching system DNS.
+    """
+    orig_getaddrinfo = socket.getaddrinfo
+
+    def new_getaddrinfo(*args, **kwargs):
+        if args[0] == hostname:
+            return orig_getaddrinfo(ip, *args[1:], **kwargs)
+        return orig_getaddrinfo(*args, **kwargs)
+
+    socket.getaddrinfo = new_getaddrinfo
