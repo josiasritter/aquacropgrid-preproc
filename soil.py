@@ -7,7 +7,7 @@ def soil(domain_path, res, basepath):
     import glob
     import xarray as xr
     import numpy as np
-    #import pdb # pdb.set_trace()
+    import pdb # pdb.set_trace()
     from preproc_tools import makedirs
 
 
@@ -113,7 +113,7 @@ def soil(domain_path, res, basepath):
         # Clipping with mask and save output files
         mosaic = mosaic.rio.clip(mask.geometry.values, mask.crs)
         mosaic = mosaic.drop_vars('band')
-        mosaic = mosaic.rename({'x': 'lon', 'y': 'lat'})
+        #mosaic = mosaic.rename({'x': 'longitude', 'y': 'latitude'})
 
         target_dir = makedirs(basepath, 'processed', '')
         targetfile = os.path.join(target_dir, 'soil_' + depth[1:-5] + '.nc')

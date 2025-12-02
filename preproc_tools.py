@@ -149,7 +149,7 @@ def preproc_era5(src, variable, yearlist, basepath, to_match):
             src = src.drop_vars('expver')
         src[variable] = src[variable].where(src[variable] >= 0, 0)  # Set negative precipitation and evaporation values to 0.
     if variable in ['InitSoilwater']:
-        src = src.drop_vars(['expver','number'])
+        src = src.drop_vars(['expver'])
 
     # Fill missing values in data variable(s)
     import scipy.ndimage as ndi
@@ -162,11 +162,9 @@ def preproc_era5(src, variable, yearlist, basepath, to_match):
 
     # Resample to project grid and mask
     src_reproj = src.rio.reproject_match(to_match, resampling=Resampling.nearest)
-    src_reproj = src_reproj.rename({'valid_time': 'time', 'x': 'longitude', 'y': 'latitude'})
+    src_reproj = src_reproj.rename({'valid_time': 'time'})
+    src_reproj = src_reproj.drop_vars(['number'])
     src_masked = src_reproj.where(to_match['Band1'] == 1)
-
-    #if variable in ['InitSoilwater']:  # NOT NEEDED AFTER ALL BECAUSE AQUACROP CAN DO IT USING ORIGINAL SOIL LAYERS FROM ERA5 (see function get_initial_WC in aquacropgrid.py)
-    #    src_reproj = convert_soildepthlayers(src_reproj)
 
     # Prepare output directory
     target_dir = makedirs(basepath, 'processed', '')
@@ -224,7 +222,7 @@ def basegrid(domain_shape_path, resolution, templategrid_path):    # Creates bas
         lats = lats[::-1]
 
         # Create xarray Dataset
-        ds = xr.Dataset({"Band1": (["latitude", "longitude"], data),},coords={"latitude": lats,"longitude": lons,},attrs={"Conventions": "CF-1.8","title": "Template raster from polygon shapefile","crs": "EPSG:4326"})
+        ds = xr.Dataset({"Band1": (["y", "x"], data),},coords={"y": ("y", lats, {"long_name": "latitude"}),"x": ("x", lons, {"long_name": "longitude"}),},attrs={"Conventions": "CF-1.8","title": "Template raster from polygon shapefile","crs": "EPSG:4326"})
         ds["spatial_ref"] = xr.DataArray(0, attrs={"grid_mapping_name": "latitude_longitude", "epsg_code": 4326, "semi_major_axis": 6378137.0, "inverse_flattening": 298.257223563, "long_name": "CRS definition"})
         ds["Band1"].attrs.update({"grid_mapping": "spatial_ref", "_FillValue": nodata_value, "missing_value": nodata_value})
 

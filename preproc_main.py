@@ -18,8 +18,8 @@ from validate_inputs import validate_inputs
 
 ## INPUT ARGUMENTS. REPLACE THESE WITH YOUR OWN VALUES
 workingdirectory = os.getcwd()   # your home directory
-domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
-#domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
+#domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
+domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
 start_year = 2010
 end_year = 2010
 api_token = 'xx'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
@@ -60,3 +60,4 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
 
 ## Run preprocessing
 aquacropgrid_preproc(domain_path, start_year, end_year, api_token, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate'])
+#aquacropgrid_preproc(domain_path, start_year, end_year, api_token, preprocess=['climate'])
