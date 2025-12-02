@@ -2,19 +2,6 @@ import os
 import geopandas as gpd
 from datetime import datetime
 
-# ----------------------------
-# Example Inputs
-# ----------------------------
-workingdirectory = '/path/to/your/workingdir'
-domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'gadm41_ESP_shp', 'galicia.geojson')
-start_year = 2014
-end_year = 2015
-api_token = 'xx'
-
-# ----------------------------
-# Validation Code
-# ----------------------------
-
 def validate_inputs(domain_path, start_year, end_year, api_token):
     # --- 1. Check that the input file exists ---
     if not os.path.exists(domain_path):
@@ -46,6 +33,15 @@ def validate_inputs(domain_path, start_year, end_year, api_token):
     print(f"✅ Polygon extents (lat/lon):")
     print(f"   Longitude: {minx:.4f} to {maxx:.4f}")
     print(f"   Latitude:  {miny:.4f} to {maxy:.4f}")
+
+    # --- Additional warning for small AOI ---
+    dx = abs(maxx - minx)
+    dy = abs(maxy - miny)
+
+    if dx < 0.25 or dy < 0.25:
+        print("⚠️  Warning: The spatial extent of the area of interest is very small.")
+        print("   Climate datasets have a coarse resolution (0.25° in the case of ReferenceET).")
+        print("   The code may fail or produce unreliable results due to low spatial resolution of climate data.")
 
     # --- 6. Check year values ---
     current_year = datetime.now().year
