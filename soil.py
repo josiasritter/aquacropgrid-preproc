@@ -1,3 +1,6 @@
+from ast import If
+
+
 def soil(domain_path, res, basepath):
 
     from owslib.wcs import WebCoverageService
@@ -22,7 +25,6 @@ def soil(domain_path, res, basepath):
     w = round((xmax-xmin)/res)
     h = round((ymax-ymin)/res)
 
-
     ## Download soil data from ISRIC Soil grids
     target_dir = makedirs(basepath, 'rawdata', 'soilgrids')
     soil_grids = SoilGrids()
@@ -34,7 +36,7 @@ def soil(domain_path, res, basepath):
 
     # Browsing through input soil maps
     for i in maps:
-        print(i)
+        print("        *** " + i + " ***")
         wcs = WebCoverageService('https://maps.isric.org/mapserv?map=/map/' + str(i) + '.map', version='2.0.1')
 
         # Choosing the mean layers
@@ -42,8 +44,15 @@ def soil(domain_path, res, basepath):
 
         # Download via soilgrids (https://github.com/gantian127/soilgrids)
         for layer in names:
-            print(layer)
+            print("        *** " + layer + " ***")
             outfile = os.path.join(target_dir, layer + '.tif')
+
+            # Skip download if file already exists
+            if os.path.isfile(outfile):
+                print("             *** Skipping download as file already exists: " + outfile + " ***")
+                print("             *** If you want to download again, delete the file and run again ***")
+                continue
+            
             data = soil_grids.get_coverage_data(
                 service_id= i,
                 coverage_id= layer,
@@ -57,8 +66,8 @@ def soil(domain_path, res, basepath):
                 output=  outfile)
 
 
-        ## Convert soil layers to mosaics for each depth layer
-    print("Converting soil layers to .nc files")
+    ## Convert soil layers to mosaics for each depth layer
+    print("        *** PREPROCESSING ISRIC SOILGRIDS DATA ***")
     search_terms = ['*0-5*.tif', '*5-15*.tif', '*15-30*.tif', '*30-60*.tif', '*60-100*.tif', '*100-200*.tif'] # search files of different soil types
     
     for depth in search_terms:
@@ -67,7 +76,8 @@ def soil(domain_path, res, basepath):
     
         # Skip processing if file already exists
         if os.path.isfile(targetfile):
-            print(f" Skipping {targetfile}, already exists.")
+            print("             *** Skipping preprocessing as file already exists: " + targetfile + " ***")
+            print("             *** If you want to reprocess, delete the file and run again ***")
             continue
     
         file_to_mosaic = []
@@ -87,7 +97,6 @@ def soil(domain_path, res, basepath):
         # Merge rasters
         mosaic = xr.merge(file_to_mosaic)
     
-
         # Convert clay, silt, and sand from (g/kg) to %.
         mosaic['Clay'] = mosaic.clay / 10
         mosaic['Sand'] = mosaic.sand / 10

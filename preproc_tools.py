@@ -53,6 +53,15 @@ def unzip_all(dir='.'):
 
 ## Preprocessing functions
 def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match):
+    
+    print("        *** PREPROCESSING SPAM DATA ***")
+    target_dir = makedirs(basepath, 'processed', '')
+    targetfile = os.path.join(target_dir, 'spam' + refyear + '_' + spam_variable + '.nc')
+    if os.path.exists(targetfile):
+        print("             *** Skipping preprocessing as file already exists: " + targetfile + " ***")
+        print("             *** If you want to reprocess, delete the file and run again ***")
+        return
+    
     mask = gpd.read_file(domain_path)
     to_match.rio.write_crs(4326, inplace=True)
 
@@ -81,7 +90,7 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
             os.remove(layer)
             continue
 
-        print(cropID, technique)
+        # print(cropID, technique)
 
         src = xr.load_dataset(layer)
         src_proj = src.rio.reproject_match(to_match, resampling=Resampling.average) # changed from nearest-neighbor to area-weighted resampling to reduce distortions 
@@ -106,8 +115,6 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
 
     # Merge data into one file
     src_mosaic = xr.merge(file_to_mosaic)
-    target_dir = makedirs(basepath, 'processed', '')
-    targetfile = os.path.join(target_dir, 'spam' + refyear + '_' + spam_variable + '.nc')
     src_mosaic.to_netcdf(targetfile)
 
 def spam_refyear(start_year, end_year):
@@ -121,7 +128,7 @@ def spam_refyear(start_year, end_year):
 
     return refyear
 
-## Preprocessing climate data
+## Preprocessing climate data from ERA5 / ERA5-Land
 def preproc_era5(src, variable, yearlist, basepath, to_match):
     print("        *** PREPROCESSING CLIMATE DATA: " + variable + " ***")
 
@@ -169,6 +176,55 @@ def preproc_era5(src, variable, yearlist, basepath, to_match):
     # Prepare output directory
     target_dir = makedirs(basepath, 'processed', '')
     targetfile = os.path.join(target_dir, variable + str(yearlist[0]) + str(yearlist[-1]) + '.nc')
+
+    # Save to disk
+    src_masked.to_netcdf(targetfile, mode='w', encoding = {variables[0]: {'zlib': True, 'complevel': 4}})  # Save to disk with moderate compression
+
+
+## Preprocessing climate data from AgERA5 (and soil water content from ERA5-Land)
+def preproc_agera5(src, variable, yearlist, basepath, to_match):
+    print("        *** PREPROCESSING CLIMATE DATA: " + variable + " ***")
+
+    # Prepare output directory
+    target_dir = makedirs(basepath, 'processed', '')
+    targetfile = os.path.join(target_dir, variable + str(yearlist[0]) + str(yearlist[-1]) + '.nc')
+
+    if os.path.exists(targetfile):
+        print("        *** Skipping preprocessing as file already exists: " + targetfile + " ***")
+        print("        *** If you want to reprocess, delete the file and run again ***")
+        return
+
+    # Variable name definitions for changing to AquaCrop conventions
+    varname_dict = {'MinTemp': 'Temperature_Air_2m_Min_24h', 'MaxTemp': 'Temperature_Air_2m_Max_24h', 'Precipitation': 'Precipitation_Flux', 'ReferenceET': 'ReferenceET_PenmanMonteith_FAO56'}  # Names of data variables in AquaCrop and AgERA5 data, respectively
+
+    # Adjust units and data variable names to AquaCrop definitions
+    if variable in ['MinTemp', 'MaxTemp', 'Precipitation', 'ReferenceET']:
+        src = src.rename_vars({varname_dict.get(variable): variable})  # Rename data variables to AquaCrop names
+        src = src.drop_vars(['crs'])
+    if variable in ['MinTemp', 'MaxTemp']:
+        src = src - 273.15  # Convert from Kelvin to Celsius
+    if variable in ['Precipitation', 'ReferenceET']:
+        src[variable] = src[variable].where(src[variable] >= 0, 0)  # Set negative precipitation and evaporation values to 0.
+    if variable in ['InitSoilwater']:
+        src = src.drop_vars(['expver', 'number'])
+        src = src.rename({'valid_time': 'time'})
+    
+    # Preparations
+    src = ensure_xy_dims(src)
+    src.rio.write_crs(4326, inplace=True)
+
+    # Fill missing values in data variables (using nearest-neighbour interpolation)
+    import scipy.ndimage as ndi
+    variables = list(src.data_vars)
+    for variab in variables:    # Loop to make it work also for InitSoilwater data, which has four data variables (corresponding to four soil depths)
+        data3d = src[variab].to_numpy()
+        nodata_mask = np.isnan(data3d[0])  # This assumes that all timesteps have the same missing cells (fair assumption, since the same ERA5-land water mask is applied to all time steps)
+        dist, nearest_indices = ndi.distance_transform_edt(nodata_mask, return_indices=True)  # Nearest-neighbour interpolation
+        src[variab].data = data3d[:, nearest_indices[0], nearest_indices[1]]
+
+    # Resample to project grid and mask
+    src_reproj = src.rio.reproject_match(to_match, resampling=Resampling.nearest)
+    src_masked = src_reproj.where(to_match['Band1'] == 1)
 
     # Save to disk
     src_masked.to_netcdf(targetfile, mode='w', encoding = {variables[0]: {'zlib': True, 'complevel': 4}})  # Save to disk with moderate compression
@@ -306,3 +362,15 @@ def safe_clip(src, mask):
     combined.attrs.update(src.attrs)
 
     return combined
+
+def agera5_merge_yearly(target_dir, yearfile):
+    import glob
+    import shutil
+    unzip_all(target_dir) 
+    yearfolder = os.path.splitext(yearfile)[0]
+    nc_files = sorted(glob.glob(os.path.join(yearfolder, '*.nc')))
+    datasets = [xr.open_dataset(f) for f in nc_files]
+    combined = xr.concat(datasets, dim='time')
+    combined = combined.sortby('time')
+    combined.to_netcdf(yearfile)
+    shutil.rmtree(yearfolder)  # remove unzipped folder to save space

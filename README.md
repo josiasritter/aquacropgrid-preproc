@@ -11,7 +11,7 @@ Conda: You'll need either Miniconda or Anaconda installed. Miniconda is generall
   - Create a CDS account (register)
   - Access your API Token (Your profile -> API Token). You will need the token as input argument for running the script (step 5 below)
   - Accept “Terms of use” at the bottom of the following two pages:
-      - ERA5: https://cds.climate.copernicus.eu/datasets/derived-era5-single-levels-daily-statistics?tab=download
+      - AgERA5: https://cds.climate.copernicus.eu/datasets/sis-agrometeorological-indicators?tab=download
       - ERA5-Land https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land?tab=download
 2. Clone this repository:
   - From command line (recommended), clone this repository to your local machine using Git (make sure you have Git installed on your system; you can download it from git-scm.com):

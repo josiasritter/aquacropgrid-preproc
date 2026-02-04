@@ -29,21 +29,24 @@ def crop_areas(domain_path, spam_variable, start_year, end_year, basepath, to_ma
         download_path = os.path.join(target_dir, f'spam{refyear}_{spam_variable}.zip')
         unzipped_dir = download_path[:-4]
 
+        print("        *** DOWNLOADING SPAM CROP AREAS ***")
+
         # If unzipped data already exists, skip everything
         if os.path.exists(unzipped_dir):
-            print(f"SPAM data already unzipped, skipping download and unzip: {unzipped_dir}")
+            print("             *** Skipping, as file already exists: " + unzipped_dir + " ***")
+            print("             *** If you want to download again, delete the file and run again ***")
             return unzipped_dir
 
         # Otherwise, check if ZIP exists
         if os.path.exists(download_path):
-            print(f" SPAM zip already exists, skipping download: {download_path}")
+            print("             *** Skipping download as file already exists: " + download_path + " ***")
         else:
-            print(f"  Downloading SPAM {refyear} data ({spam_variable})")
-            print('    URL:', url)
+            print(f"             *** Downloading SPAM {refyear} data ({spam_variable}) ***")
+            print("             *** URL:", url)
             download_url(url, download_path=download_path)
 
         # Unzip (if not already unzipped)
-        print(" Unzipping SPAM data...")
+        print("             *** Unzipping SPAM data ***")
         unzip_all(dir=target_dir)
 
         return unzipped_dir

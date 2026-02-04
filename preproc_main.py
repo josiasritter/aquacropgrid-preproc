@@ -15,14 +15,15 @@ Script generates preprocessed datasets (grids) containing:
 import os
 from preproc_tools import basegrid
 from validate_inputs import validate_inputs
+import pdb
 
 ## INPUT ARGUMENTS. REPLACE THESE WITH YOUR OWN VALUES
 workingdirectory = os.getcwd()   # your home directory
 #domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
 domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
 start_year = 2010
-end_year = 2010
-api_token = 'xx'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
+end_year = 2011
+api_token = '0fe27966-2d39-4d7b-a4d4-f85f9539b548'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
 
 ##
 def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cell_resolution=0.05, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate']):
@@ -34,6 +35,7 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
     # Create template raster file from domain shape for all other datasets to align
     templategrid_path = os.path.join(workingdirectory, 'template_grid.nc')
     to_match, bounds = basegrid(domain_path, cell_resolution, templategrid_path)
+    #pdb.set_trace()
 
     # Download and preprocess soil data from ISRIC Soilgrids
     if 'soil' in preprocess:
@@ -53,10 +55,12 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
         from cropcalendar_module import cropcalendar 
         cropcalendar(domain_shape_path, workingdirectory, templategrid_path)
 
-    # Download and preprocess climate data and initial soil moisture from ERA5 and ERA5-Land
+    # Download and preprocess climate data and initial soil moisture from AgERA5 and ERA5-Land
     if 'climate' in preprocess:
-        from climate import climate
-        climate(workingdirectory, domain_shape_path, start_year, end_year, api_token, cell_resolution)
+        #from climate import climate
+        #climate(workingdirectory, domain_shape_path, start_year, end_year, api_token, cell_resolution)
+        from climate_AgERA5 import climate_AgERA5
+        climate_AgERA5(workingdirectory, domain_shape_path, start_year, end_year, api_token, cell_resolution)#, variables=['MaxTemp'])  # for testing 
 
 ## Run preprocessing
 aquacropgrid_preproc(domain_path, start_year, end_year, api_token, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate'])
