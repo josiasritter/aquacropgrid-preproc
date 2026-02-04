@@ -23,7 +23,7 @@ workingdirectory = os.getcwd()   # your home directory
 domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
 start_year = 2010
 end_year = 2011
-api_token = '0fe27966-2d39-4d7b-a4d4-f85f9539b548'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
+api_token = 'xxx'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
 
 ##
 def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cell_resolution=0.05, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate']):
