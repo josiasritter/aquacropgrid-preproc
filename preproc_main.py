@@ -40,7 +40,7 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
     # Download and preprocess soil data from ISRIC Soilgrids
     if 'soil' in preprocess:
         from soil import soil
-        soil(domain_shape_path, cell_resolution, workingdirectory)
+        soil(domain_shape_path, cell_resolution, workingdirectory, templategrid_path)
 
     # Download and preprocess crop areas (crop mask) and crop yield from SPAM data (https://www.mapspam.info/)
     if 'crop_areas' in preprocess:

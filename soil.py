@@ -1,7 +1,4 @@
-from ast import If
-
-
-def soil(domain_path, res, basepath):
+def soil(domain_path, res, basepath, templategrid_path):
 
     from owslib.wcs import WebCoverageService
     import os
@@ -24,6 +21,10 @@ def soil(domain_path, res, basepath):
 
     w = round((xmax-xmin)/res)
     h = round((ymax-ymin)/res)
+    
+    # Load template grid from single source of truth
+    to_match = xr.open_dataset(templategrid_path)
+    to_match.rio.write_crs(4326, inplace=True)
 
     ## Download soil data from ISRIC Soil grids
     target_dir = makedirs(basepath, 'rawdata', 'soilgrids')
@@ -118,6 +119,7 @@ def soil(domain_path, res, basepath):
         mosaic['Sand'] = mosaic.Sand.rio.interpolate_na()
         som['Som'] = som.Som.rio.write_nodata(np.nan)
         mosaic['Som'] = som.Som.rio.interpolate_na()
+        mosaic = mosaic.rio.reproject_match(to_match) # reproject to match templategrid
 
         # Clipping with mask and save output files
         mosaic = mosaic.rio.clip(mask.geometry.values, mask.crs)
