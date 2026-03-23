@@ -5,9 +5,10 @@ def soil(domain_path, res, basepath, templategrid_path):
     import geopandas as gpd
     from soilgrids import SoilGrids
     import glob
+    import rioxarray
     import xarray as xr
     import numpy as np
-    import pdb # pdb.set_trace()
+    #import pdb # pdb.set_trace()
     from preproc_tools import makedirs
 
 
@@ -37,7 +38,7 @@ def soil(domain_path, res, basepath, templategrid_path):
 
     # Browsing through input soil maps
     for i in maps:
-        print("        *** " + i + " ***")
+        print(i)
         wcs = WebCoverageService('https://maps.isric.org/mapserv?map=/map/' + str(i) + '.map', version='2.0.1')
 
         # Choosing the mean layers
@@ -45,15 +46,8 @@ def soil(domain_path, res, basepath, templategrid_path):
 
         # Download via soilgrids (https://github.com/gantian127/soilgrids)
         for layer in names:
-            print("        *** " + layer + " ***")
+            print(layer)
             outfile = os.path.join(target_dir, layer + '.tif')
-
-            # Skip download if file already exists
-            if os.path.isfile(outfile):
-                print("             *** Skipping download as file already exists: " + outfile + " ***")
-                print("             *** If you want to download again, delete the file and run again ***")
-                continue
-            
             data = soil_grids.get_coverage_data(
                 service_id= i,
                 coverage_id= layer,
@@ -67,8 +61,8 @@ def soil(domain_path, res, basepath, templategrid_path):
                 output=  outfile)
 
 
-    ## Convert soil layers to mosaics for each depth layer
-    print("        *** PREPROCESSING ISRIC SOILGRIDS DATA ***")
+        ## Convert soil layers to mosaics for each depth layer
+    print("Converting soil layers to .nc files")
     search_terms = ['*0-5*.tif', '*5-15*.tif', '*15-30*.tif', '*30-60*.tif', '*60-100*.tif', '*100-200*.tif'] # search files of different soil types
     
     for depth in search_terms:
@@ -77,8 +71,7 @@ def soil(domain_path, res, basepath, templategrid_path):
     
         # Skip processing if file already exists
         if os.path.isfile(targetfile):
-            print("             *** Skipping preprocessing as file already exists: " + targetfile + " ***")
-            print("             *** If you want to reprocess, delete the file and run again ***")
+            print(f" Skipping {targetfile}, already exists.")
             continue
     
         file_to_mosaic = []

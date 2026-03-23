@@ -15,8 +15,6 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
     to_match = xr.open_dataset(referenceraster_path)
     to_match.rio.write_crs(4326, inplace=True)
 
-    print("        *** DOWNLOADING GGCMI CROP CALENDAR DATA ***")
-
     ## Download crop calendar dataset from GGCMI (Jägermeyr et al. 2021; https://zenodo.org/records/5062513)
     url = 'https://zenodo.org/api/records/5062513/files-archive'
     target_dir = makedirs(basepath, 'rawdata', 'cropcalendar')
@@ -25,19 +23,17 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
 
     #  Skip everything if already unzipped
     if os.path.exists(unzipped_download_directory):
-        print("             *** Skipping, as file already exists: " + unzipped_download_directory + " ***")
-        print("             *** If you want to download again, delete the file and run again ***")
+        print(f" GGCMI crop calendar already unzipped, skipping: {unzipped_download_directory}")
     else:
         #  Skip download if ZIP exists
         if os.path.exists(download_path):
-            print("             *** Skipping download as file already exists: " + download_path + " ***")
-            print("             *** If you want to download again, delete the file and run again ***")
+            print(f" ZIP already exists, skipping download: {download_path}")
         else:
-            print("             *** Downloading GGCMI crop calendar data ***")
-            print("             *** URL:", url)
+            print(" Downloading GGCMI crop calendar data")
+            print('   URL:', url)
             download_url(url, download_path=download_path)
 
-        print("             *** Unzipping GGCMI crop calendar data ***")
+        print("Unzipping GGCMI crop calendar data...")
         unzip_all(dir=target_dir)
 
 

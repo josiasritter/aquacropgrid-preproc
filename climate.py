@@ -19,6 +19,23 @@ from shapely.geometry import mapping
 
 from preproc_tools import preproc_era5, basegrid, makedirs
 
+import socket
+
+def force_resolve(ip, hostname="cds.climate.copernicus.eu"):
+    """
+    Force a specific hostname to resolve to a given IP address
+    inside Python, without touching system DNS.
+    """
+    print('Forcing resolve...')
+    orig_getaddrinfo = socket.getaddrinfo
+
+    def new_getaddrinfo(*args, **kwargs):
+        if args[0] == hostname:
+            return orig_getaddrinfo(ip, *args[1:], **kwargs)
+        return orig_getaddrinfo(*args, **kwargs)
+
+    socket.getaddrinfo = new_getaddrinfo
+
 def climate(basepath, domain_path, start_year, end_year, api_token, cell_resolution, variables=['MinTemp','MaxTemp','Precipitation','ReferenceET','InitSoilwater']):
 
     ## Years to be downloaded
