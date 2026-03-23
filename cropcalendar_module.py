@@ -43,13 +43,6 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
 
     ## Convert separate files to rasterstack, reproject (nearest neighbour) to 0.05 degrees, and clip to domain
 
-    print("        *** PREPROCESSING CROP CALENDAR DATA ***")
-    target_dir = makedirs(basepath, 'processed', '')
-    targetfile = os.path.join(target_dir, 'cropcalendar.nc')
-    if os.path.exists(targetfile):
-        print("             *** Skipping preprocessing as file already exists: " + targetfile + " ***")
-        print("             *** If you want to reprocess, delete the file and run again ***")
-
     # Dictionary that connects GGCMI crop ID's to crop names in AquaCrop. Used for layer naming
     crop_dict = {'bar': 'Barley', 'cot': 'Cotton', 'bea': 'DryBean', 'mai': 'Maize', 'ri1': 'PaddyRice1', 'ri2': 'PaddyRice2', 'pot': 'Potato', 'sor': 'Sorghum', 'soy': 'Soybean', 'sgb': 'SugarBeet', 'sgc': 'SugarCane', 'sun': 'Sunflower', 'swh': 'Wheat_summer', 'wwh': 'Wheat_winter', 'cas': 'Cassava'}
 
@@ -88,4 +81,6 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
 
     # Merge data into one file
     src_mosaic = xr.merge(file_to_mosaic)
+    target_dir = makedirs(basepath, 'processed', '')
+    targetfile = os.path.join(target_dir, 'cropcalendar.nc')
     src_mosaic.to_netcdf(targetfile)

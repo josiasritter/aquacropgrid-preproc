@@ -53,15 +53,6 @@ def unzip_all(dir='.'):
 
 ## Preprocessing functions
 def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match):
-    
-    print("        *** PREPROCESSING SPAM DATA ***")
-    target_dir = makedirs(basepath, 'processed', '')
-    targetfile = os.path.join(target_dir, 'spam' + refyear + '_' + spam_variable + '.nc')
-    if os.path.exists(targetfile):
-        print("             *** Skipping preprocessing as file already exists: " + targetfile + " ***")
-        print("             *** If you want to reprocess, delete the file and run again ***")
-        return
-    
     mask = gpd.read_file(domain_path)
     to_match.rio.write_crs(4326, inplace=True)
 
@@ -115,6 +106,8 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
 
     # Merge data into one file
     src_mosaic = xr.merge(file_to_mosaic)
+    target_dir = makedirs(basepath, 'processed', '')
+    targetfile = os.path.join(target_dir, 'spam' + refyear + '_' + spam_variable + '.nc')
     src_mosaic.to_netcdf(targetfile)
 
 def spam_refyear(start_year, end_year):
