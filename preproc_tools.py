@@ -9,6 +9,7 @@ import geopandas as gpd
 import os
 import glob
 import time
+import dask
 import requests
 from zipfile import ZipFile
 import pdb # pdb.set_trace()
@@ -139,7 +140,10 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     if variable in ['InitSoilwater']:
         src = src.drop_vars(['expver', 'number'])
         src = src.rename({'valid_time': 'time'})
-    
+        
+    # Set CRS here, transformations above can strip it 
+    src = ensure_xy_dims(src)
+    src.rio.write_crs(4326, inplace=True)
 
     # Resample to project grid and mask (before gap-filling to prevent ET0 NaNs)
     src_reproj = src.rio.reproject_match(to_match, resampling=Resampling.nearest)
@@ -170,10 +174,12 @@ def agera5_merge_yearly(target_dir, yearfile):
     unzip_all(target_dir) 
     yearfolder = os.path.splitext(yearfile)[0]
     nc_files = sorted(glob.glob(os.path.join(yearfolder, '*.nc')))
-    datasets = [xr.open_dataset(f) for f in nc_files]
-    combined = xr.concat(datasets, dim='time')
-    combined = combined.sortby('time')
-    combined.to_netcdf(yearfile)
+    
+    # Combining files safely in windows (no files left open)
+    with xr.open_mfdataset(nc_files) as combined:
+        combined = combined.sortby('time')
+        combined.to_netcdf(yearfile)
+    
     shutil.rmtree(yearfolder)  # remove unzipped folder to save space
 
 
