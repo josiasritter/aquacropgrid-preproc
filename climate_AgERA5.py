@@ -18,7 +18,25 @@ import cdsapi
 from shapely.geometry import mapping
 import pdb
 
-from preproc_tools import agera5_merge_yearly, preproc_era5, preproc_agera5, basegrid, makedirs, unzip_all
+from preproc_tools import agera5_merge_yearly, preproc_agera5, basegrid, makedirs, unzip_all
+
+import socket
+
+def force_resolve(ip, hostname="cds.climate.copernicus.eu"):
+    """
+    Force a specific hostname to resolve to a given IP address
+    inside Python, without touching system DNS.
+    """
+    print('Forcing resolve...')
+    orig_getaddrinfo = socket.getaddrinfo
+
+    def new_getaddrinfo(*args, **kwargs):
+        if args[0] == hostname:
+            return orig_getaddrinfo(ip, *args[1:], **kwargs)
+        return orig_getaddrinfo(*args, **kwargs)
+
+    socket.getaddrinfo = new_getaddrinfo
+
 
 def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_resolution, variables=['MinTemp','MaxTemp','Precipitation','ReferenceET','InitSoilwater']):
 
@@ -49,7 +67,7 @@ def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_
             targetfile = os.path.join(target_dir, variable + str(year) + '.zip')
             yearfile = os.path.join(target_dir, variable + str(year) + '.nc')
             if not os.path.exists(targetfile) and not os.path.exists(yearfile):  # Skip download if zip file or merged yearly .nc file already exist
-                print("        *** DOWNLOADING CLIMATE DATA: " + variable + str(year) + " ***")
+                print("        *** DOWNLOADING CLIMATE DATA FROM AgERA5: " + variable + str(year) + " ***")
                 c.retrieve(
                     "sis-agrometeorological-indicators",
                     {
@@ -83,7 +101,7 @@ def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_
     if variable in variables:
         targetfile = os.path.join(target_dir, variable + str(start_year) + '.nc')
         if not os.path.exists(targetfile):  # Skip download if file already exists
-            print("        *** DOWNLOADING CLIMATE DATA: " + variable + " ***")
+            print("        *** DOWNLOADING SOIL MOISTURE DATA FROM ERA5-Land: " + variable + " ***")
             c.retrieve(
                 "reanalysis-era5-land",
                 {

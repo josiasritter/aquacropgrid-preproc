@@ -1,16 +1,14 @@
-from ast import If
-
-
-def soil(domain_path, res, basepath):
+def soil(domain_path, res, basepath, templategrid_path):
 
     from owslib.wcs import WebCoverageService
     import os
     import geopandas as gpd
     from soilgrids import SoilGrids
     import glob
+    import rioxarray
     import xarray as xr
     import numpy as np
-    import pdb # pdb.set_trace()
+    #import pdb # pdb.set_trace()
     from preproc_tools import makedirs
 
 
@@ -24,6 +22,10 @@ def soil(domain_path, res, basepath):
 
     w = round((xmax-xmin)/res)
     h = round((ymax-ymin)/res)
+    
+    # Load template grid from single source of truth
+    to_match = xr.open_dataset(templategrid_path)
+    to_match.rio.write_crs(4326, inplace=True)
 
     ## Download soil data from ISRIC Soil grids
     target_dir = makedirs(basepath, 'rawdata', 'soilgrids')
@@ -36,7 +38,7 @@ def soil(domain_path, res, basepath):
 
     # Browsing through input soil maps
     for i in maps:
-        print("        *** " + i + " ***")
+        print(i)
         wcs = WebCoverageService('https://maps.isric.org/mapserv?map=/map/' + str(i) + '.map', version='2.0.1')
 
         # Choosing the mean layers
@@ -44,7 +46,7 @@ def soil(domain_path, res, basepath):
 
         # Download via soilgrids (https://github.com/gantian127/soilgrids)
         for layer in names:
-            print("        *** " + layer + " ***")
+            print(layer)
             outfile = os.path.join(target_dir, layer + '.tif')
 
             # Skip download if file already exists
@@ -52,7 +54,7 @@ def soil(domain_path, res, basepath):
                 print("             *** Skipping download as file already exists: " + outfile + " ***")
                 print("             *** If you want to download again, delete the file and run again ***")
                 continue
-            
+
             data = soil_grids.get_coverage_data(
                 service_id= i,
                 coverage_id= layer,
@@ -67,7 +69,7 @@ def soil(domain_path, res, basepath):
 
 
     ## Convert soil layers to mosaics for each depth layer
-    print("        *** PREPROCESSING ISRIC SOILGRIDS DATA ***")
+    print("Converting soil layers to .nc files")
     search_terms = ['*0-5*.tif', '*5-15*.tif', '*15-30*.tif', '*30-60*.tif', '*60-100*.tif', '*100-200*.tif'] # search files of different soil types
     
     for depth in search_terms:
@@ -76,8 +78,7 @@ def soil(domain_path, res, basepath):
     
         # Skip processing if file already exists
         if os.path.isfile(targetfile):
-            print("             *** Skipping preprocessing as file already exists: " + targetfile + " ***")
-            print("             *** If you want to reprocess, delete the file and run again ***")
+            print(f" Skipping {targetfile}, already exists.")
             continue
     
         file_to_mosaic = []
@@ -118,12 +119,11 @@ def soil(domain_path, res, basepath):
         mosaic['Sand'] = mosaic.Sand.rio.interpolate_na()
         som['Som'] = som.Som.rio.write_nodata(np.nan)
         mosaic['Som'] = som.Som.rio.interpolate_na()
+        mosaic = mosaic.rio.reproject_match(to_match) # reproject to match templategrid
 
         # Clipping with mask and save output files
         mosaic = mosaic.rio.clip(mask.geometry.values, mask.crs)
         mosaic = mosaic.drop_vars('band')
-        #mosaic = mosaic.rename({'x': 'longitude', 'y': 'latitude'})
-
         target_dir = makedirs(basepath, 'processed', '')
         targetfile = os.path.join(target_dir, 'soil_' + depth[1:-5] + '.nc')
         mosaic.to_netcdf(targetfile)
