@@ -48,6 +48,13 @@ def soil(domain_path, res, basepath, templategrid_path):
         for layer in names:
             print(layer)
             outfile = os.path.join(target_dir, layer + '.tif')
+
+            # Skip download if file already exists
+            if os.path.isfile(outfile):
+                print("             *** Skipping download as file already exists: " + outfile + " ***")
+                print("             *** If you want to download again, delete the file and run again ***")
+                continue
+
             data = soil_grids.get_coverage_data(
                 service_id= i,
                 coverage_id= layer,
@@ -61,7 +68,7 @@ def soil(domain_path, res, basepath, templategrid_path):
                 output=  outfile)
 
 
-        ## Convert soil layers to mosaics for each depth layer
+    ## Convert soil layers to mosaics for each depth layer
     print("Converting soil layers to .nc files")
     search_terms = ['*0-5*.tif', '*5-15*.tif', '*15-30*.tif', '*30-60*.tif', '*60-100*.tif', '*100-200*.tif'] # search files of different soil types
     
@@ -117,7 +124,6 @@ def soil(domain_path, res, basepath, templategrid_path):
         # Clipping with mask and save output files
         mosaic = mosaic.rio.clip(mask.geometry.values, mask.crs)
         mosaic = mosaic.drop_vars('band')
-        # no need to rename, keep as x/y, not lat/lon
         target_dir = makedirs(basepath, 'processed', '')
         targetfile = os.path.join(target_dir, 'soil_' + depth[1:-5] + '.nc')
         mosaic.to_netcdf(targetfile)

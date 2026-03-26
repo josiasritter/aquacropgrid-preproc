@@ -20,7 +20,8 @@ import pdb
 ## INPUT ARGUMENTS. REPLACE THESE WITH YOUR OWN VALUES
 workingdirectory = os.getcwd()   # your home directory
 #domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
-domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
+#domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
+domain_path = os.path.join(workingdirectory, 'inputdata', 'germany', 'niedersachsen.geojson')
 start_year = 2010
 end_year = 2011
 api_token = 'xxx'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
@@ -54,10 +55,10 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
         from cropcalendar_module import cropcalendar 
         cropcalendar(domain_shape_path, workingdirectory, templategrid_path)
 
-    # Download and preprocess climate data and initial soil moisture from ERA5 and ERA5-Land
+    # Download and preprocess climate data (from AgERA5) and initial soil moisture (from ERA5-Land) from the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
     if 'climate' in preprocess:
-        from climate import climate
-        climate(workingdirectory, domain_shape_path, start_year, end_year, api_token, cell_resolution)
+        from climate_AgERA5 import climate_AgERA5
+        climate_AgERA5(workingdirectory, domain_shape_path, start_year, end_year, api_token, cell_resolution)#, variables=['MaxTemp'])  # for testing 
 
 ## Run preprocessing
 aquacropgrid_preproc(domain_path, start_year, end_year, api_token, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate'])

@@ -46,6 +46,15 @@ def validate_inputs(domain_path, start_year, end_year, api_token):
     print(f"✅ Polygon extents (lat/lon):")
     print(f"   Longitude: {minx:.4f} to {maxx:.4f}")
     print(f"   Latitude:  {miny:.4f} to {maxy:.4f}")
+    
+    # --- Additional warning for small AOI ---
+    dx = abs(maxx - minx)
+    dy = abs(maxy - miny)
+
+    if dx < 0.25 or dy < 0.25:
+        print("⚠️  Warning: The spatial extent of the area of interest is very small.")
+        print("   Climate datasets have a coarse resolution (0.25° in the case of ReferenceET).")
+        print("   The code may fail or produce unreliable results due to low spatial resolution of climate data.")
 
     # --- 6. Check year values ---
     current_year = datetime.now().year

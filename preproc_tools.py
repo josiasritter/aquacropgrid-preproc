@@ -121,42 +121,34 @@ def spam_refyear(start_year, end_year):
 
     return refyear
 
-## Preprocessing climate data
-def preproc_era5(src, variable, yearlist, basepath, to_match):
+## Preprocessing climate data from AgERA5 (and soil water content from ERA5-Land)
+def preproc_agera5(src, variable, yearlist, basepath, to_match):
     print("        *** PREPROCESSING CLIMATE DATA: " + variable + " ***")
 
+    # Variable name definitions for changing to AquaCrop conventions
+    varname_dict = {'MinTemp': 'Temperature_Air_2m_Min_24h', 'MaxTemp': 'Temperature_Air_2m_Max_24h', 'Precipitation': 'Precipitation_Flux', 'ReferenceET': 'ReferenceET_PenmanMonteith_FAO56'}  # Names of data variables in AquaCrop and AgERA5 data, respectively
+
+    # Adjust units and data variable names to AquaCrop definitions
+    if variable in ['MinTemp', 'MaxTemp', 'Precipitation', 'ReferenceET']:
+        src = src.rename_vars({varname_dict.get(variable): variable})  # Rename data variables to AquaCrop names
+        src = src.drop_vars(['crs'])
+    if variable in ['MinTemp', 'MaxTemp']:
+        src = src - 273.15  # Convert from Kelvin to Celsius
+    if variable in ['Precipitation', 'ReferenceET']:
+        src[variable] = src[variable].where(src[variable] >= 0, 0)  # Set negative precipitation and evaporation values to 0.
+    if variable in ['InitSoilwater']:
+        src = src.drop_vars(['expver', 'number'])
+        src = src.rename({'valid_time': 'time'})
+    
     # Preparations
     src = ensure_xy_dims(src)
     src.rio.write_crs(4326, inplace=True)
 
-    varname_dict = {'MinTemp': 't2m', 'MaxTemp': 't2m', 'Precipitation': 'tp', 'ReferenceET': 'pev'}  # Names of data variables in AquaCrop and ERA5 data, respectively
-
-    # Adjust units and data variable names to AquaCrop definitions
-    if variable in ['MinTemp', 'MaxTemp']:
-        src = src.rename_vars({varname_dict.get(variable): variable})  # Rename data variables to AquaCrop names
-        src = src - 273.15  # Convert from Kelvin to Celsius
-    if variable in ['Precipitation', 'ReferenceET']:
-        src = src.rename_vars({varname_dict.get(variable): variable})  # Rename data variables to AquaCrop names
-        src = src * 1000 # Convert from metres to millimetres
-        if variable in ['ReferenceET']:
-            src = -src  # Multiply by -1 since raw data is negative due to ERA5 definition (i.e. downward fluxes are positive, upward fluxes negative)
-        elif variable in ['Precipitation']:
-            # Adjust time coordinate to date of previous day, as Jan 1 00:00 represents daily accumulation of Dec 31 of previous year (see ERA5 time step definition: https://confluence.ecmwf.int/display/CKB/ERA5-Land%3A+data+documentation )
-            src = src.isel(valid_time=slice(1, None))   # Delete first time step as it represents daily accumulation of 31/12 of previous year
-            valid_dates = pd.to_datetime(src.valid_time.values)  # Convert valid_time to pandas DatetimeIndex
-            new_dates = (valid_dates.normalize() - pd.Timedelta(days=1))  # Strip time part (keep just the date) and shift back by one day
-            src = src.assign_coords(valid_time=new_dates)  # Assign adjusted timestamps back to the dataset
-            src = src.drop_vars(['expver', 'number'], errors='ignore')
-        src[variable] = src[variable].where(src[variable] >= 0, 0)  # Set negative precipitation and evaporation values to 0.
-    if variable in ['InitSoilwater']:
-        src = src.drop_vars(['expver','number'])
-        
     # Resample to project grid and mask (before gap-filling to prevent ET0 NaNs)
     src_reproj = src.rio.reproject_match(to_match, resampling=Resampling.nearest)
-    src_reproj = src_reproj.rename({'valid_time': 'time'}) # don't change x/y to lat/lon naming-wise
     src_masked = src_reproj.where(to_match['Band1'] == 1)
 
-    # Fill missing values in data variable(s)
+    # Fill missing values in data variables (using nearest-neighbour interpolation)
     import scipy.ndimage as ndi
     variables = list(src.data_vars)
     for variab in variables:    # Loop to make it work also for InitSoilwater data, which has four data variables (corresponding to four soil depths)
@@ -165,20 +157,27 @@ def preproc_era5(src, variable, yearlist, basepath, to_match):
         dist, nearest_indices = ndi.distance_transform_edt(nodata_mask, return_indices=True)  # Nearest-neighbour interpolation
         src[variab].data = data3d[:, nearest_indices[0], nearest_indices[1]]
 
-    
-
-    #if variable in ['InitSoilwater']:  # NOT NEEDED AFTER ALL BECAUSE AQUACROP CAN DO IT USING ORIGINAL SOIL LAYERS FROM ERA5 (see function get_initial_WC in aquacropgrid.py)
-    #    src_reproj = convert_soildepthlayers(src_reproj)
-
     # Prepare output directory
     target_dir = makedirs(basepath, 'processed', '')
     targetfile = os.path.join(target_dir, variable + str(yearlist[0]) + str(yearlist[-1]) + '.nc')
 
-    # Save to disk
-    # Drop singleton dimensions and auxiliary coordinates before saving
+    # Save to disk. Drop singleton dimensions and auxiliary coordinates before saving
     src_masked = src_masked.squeeze(drop=True)
     src_masked = src_masked.drop_vars('spatial_ref', errors='ignore')
     src_masked.to_netcdf(targetfile, mode='w', encoding={variables[0]: {'zlib': True, 'complevel': 4}})
+
+
+def agera5_merge_yearly(target_dir, yearfile):
+    import glob
+    import shutil
+    unzip_all(target_dir) 
+    yearfolder = os.path.splitext(yearfile)[0]
+    nc_files = sorted(glob.glob(os.path.join(yearfolder, '*.nc')))
+    datasets = [xr.open_dataset(f) for f in nc_files]
+    combined = xr.concat(datasets, dim='time')
+    combined = combined.sortby('time')
+    combined.to_netcdf(yearfile)
+    shutil.rmtree(yearfolder)  # remove unzipped folder to save space
 
 
 ## Helper functions
