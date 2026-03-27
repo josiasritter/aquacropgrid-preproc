@@ -16,3 +16,8 @@ dependencies:
   - conda-forge::rioxarray
   - owslib
   - conda-forge::soilgrids
+  - conda-forge::dask
+  - pip
+  - pip:
+    - aquacrop
+    - dnspython

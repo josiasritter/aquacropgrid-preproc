@@ -183,7 +183,8 @@ def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_
         targetfile = os.path.join(target_dir, variable + str(start_year) + '.nc')
         if not os.path.exists(targetfile):  # Skip download if file already exists
             print("        *** DOWNLOADING SOIL MOISTURE DATA FROM ERA5-Land: " + variable + " ***")
-            c.retrieve(
+            retrieve_with_dns_fallback(
+                    c,
                 "reanalysis-era5-land",
                 {
                     "variable": [
