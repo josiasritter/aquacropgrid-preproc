@@ -139,8 +139,8 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     if variable in ['InitSoilwater']:
         src = src.drop_vars(['expver', 'number'])
         src = src.rename({'valid_time': 'time'})
-    
-    # Preparations
+        
+    # Set CRS here, transformations above can strip it 
     src = ensure_xy_dims(src)
     src.rio.write_crs(4326, inplace=True)
 
@@ -173,10 +173,12 @@ def agera5_merge_yearly(target_dir, yearfile):
     unzip_all(target_dir) 
     yearfolder = os.path.splitext(yearfile)[0]
     nc_files = sorted(glob.glob(os.path.join(yearfolder, '*.nc')))
-    datasets = [xr.open_dataset(f) for f in nc_files]
-    combined = xr.concat(datasets, dim='time')
-    combined = combined.sortby('time')
-    combined.to_netcdf(yearfile)
+    
+    # Combining files safely in windows (no files left open)
+    with xr.open_mfdataset(nc_files) as combined:
+        combined = combined.sortby('time')
+        combined.to_netcdf(yearfile)
+    
     shutil.rmtree(yearfolder)  # remove unzipped folder to save space
 
 

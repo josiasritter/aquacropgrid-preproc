@@ -53,4 +53,8 @@ def crop_areas(domain_path, spam_variable, start_year, end_year, basepath, to_ma
     download_dir = download_spam(refyear, spam_variable, basepath)
 
     ## Preprocess data for model domain
-    preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match)
+    target_dir = makedirs(basepath, 'processed', '')
+    targetfile = os.path.join(target_dir, 'spam' + refyear + '_' + spam_variable + '.nc')
+    if not os.path.exists(targetfile):  # Skip processing if file already exists
+        print(f"Processing SPAM data for model domain and saving to {targetfile}")
+        preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match)

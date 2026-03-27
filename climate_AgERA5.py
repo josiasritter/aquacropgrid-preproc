@@ -21,23 +21,102 @@ import pdb
 from preproc_tools import agera5_merge_yearly, preproc_agera5, basegrid, makedirs, unzip_all
 
 import socket
+import requests
+import dns.resolver  # pip install dnspython
 
+# Set of functions to automatically overcome DNS-based errors, often found on university networks
 def force_resolve(ip, hostname="cds.climate.copernicus.eu"):
     """
     Force a specific hostname to resolve to a given IP address
     inside Python, without touching system DNS.
     """
-    print('Forcing resolve...')
+    print(f'Forcing resolve: {hostname} -> {ip}')
     orig_getaddrinfo = socket.getaddrinfo
-
+ 
     def new_getaddrinfo(*args, **kwargs):
         if args[0] == hostname:
             return orig_getaddrinfo(ip, *args[1:], **kwargs)
         return orig_getaddrinfo(*args, **kwargs)
-
+ 
     socket.getaddrinfo = new_getaddrinfo
+ 
+ 
+def resolve_via_doh(hostname="cds.climate.copernicus.eu", doh_url="https://cloudflare-dns.com/dns-query"):
+    """
+    Resolve hostname via DNS-over-HTTPS, bypassing any
+    port-53 interception by the university network.
+    """
+    resp = requests.get(
+        doh_url,
+        params={"name": hostname, "type": "A"},
+        headers={"Accept": "application/dns-json"},
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    # Filter for A records (type 1)
+    a_records = [ans["data"] for ans in data.get("Answer", []) if ans["type"] == 1]
+    if not a_records:
+        raise RuntimeError(f"No A records found for {hostname} via DoH")
+    ip = a_records[0]
+    print(f"Resolved {hostname} to {ip} via DoH")
+    return ip
+ 
+ 
+_dns_fallback_applied = False  # Module-level flag so we only apply the monkey-patch once
+ 
+ 
+def _is_dns_error(exc):
+    """Check whether an exception (or its chain) is a DNS resolution failure."""
+    # Walk the cause chain — cdsapi wraps errors in requests exceptions
+    current = exc
+    while current is not None:
+        if isinstance(current, socket.gaierror):
+            return True
+        # requests wraps socket errors in ConnectionError
+        if 'Name or service not known' in str(current) or 'getaddrinfo failed' in str(current):
+            return True
+        current = getattr(current, '__cause__', None) or getattr(current, '__context__', None)
+    return False
+ 
+ 
+def retrieve_with_dns_fallback(client, dataset, request, target):
+    """
+    Wrapper around cdsapi retrieve that automatically falls back to
+    public DNS resolution if the university network can't resolve the CDS hostname.
+    """
+    global _dns_fallback_applied
+ 
+    # If we've already applied the fix in a previous call, just go straight through
+    if _dns_fallback_applied:
+        return client.retrieve(dataset, request, target)
+ 
+    try:
+        return client.retrieve(dataset, request, target)
+    except Exception as e:
+        if _is_dns_error(e):
+            print('\nDNS resolution failed — falling back to public DNS...')
+            ip = resolve_via_doh()
+            force_resolve(ip)
+            _dns_fallback_applied = True
+            return client.retrieve(dataset, request, target)
+        else:
+            raise  # Not a DNS problem — re-raise as-is
+            
+def ensure_cds_dns(hostname="cds.climate.copernicus.eu"):
+    """
+    Check if the CDS hostname resolves via system DNS.
+    If not, fall back to public DNS and monkey-patch.
+    """
+    try:
+        socket.getaddrinfo(hostname, 443)
+        print(f'DNS resolution OK for {hostname}')
+    except socket.gaierror:
+        print(f'System DNS failed for {hostname} — falling back to public DNS...')
+        ip = resolve_via_doh(hostname)
+        force_resolve(ip, hostname)
 
 
+# Continue with main script functionality
 def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_resolution, variables=['MinTemp','MaxTemp','Precipitation','ReferenceET','InitSoilwater']):
 
     ## Years to be downloaded
@@ -56,6 +135,7 @@ def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_
     stats_api = {'MinTemp': '24_hour_minimum', 'MaxTemp': '24_hour_maximum', 'Precipitation': '', 'ReferenceET': ''}  # Stats to be requested from API for each variable. Only needed for min and max temperature, as AgERA5 api provides daily accumulations for precipitation and reference ET
 
     # Prepare Copernicus Climate Data Store (CDS) API
+    ensure_cds_dns()
     url = 'https://cds.climate.copernicus.eu/api'
     c = cdsapi.Client(url=url, key=api_token)
 
@@ -68,7 +148,8 @@ def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_
             yearfile = os.path.join(target_dir, variable + str(year) + '.nc')
             if not os.path.exists(targetfile) and not os.path.exists(yearfile):  # Skip download if zip file or merged yearly .nc file already exist
                 print("        *** DOWNLOADING CLIMATE DATA FROM AgERA5: " + variable + str(year) + " ***")
-                c.retrieve(
+                retrieve_with_dns_fallback(
+                    c,
                     "sis-agrometeorological-indicators",
                     {
                         "variable": [varname_api.get(variable)],
@@ -102,7 +183,8 @@ def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_
         targetfile = os.path.join(target_dir, variable + str(start_year) + '.nc')
         if not os.path.exists(targetfile):  # Skip download if file already exists
             print("        *** DOWNLOADING SOIL MOISTURE DATA FROM ERA5-Land: " + variable + " ***")
-            c.retrieve(
+            retrieve_with_dns_fallback(
+                    c,
                 "reanalysis-era5-land",
                 {
                     "variable": [
