@@ -9,7 +9,7 @@ def soil(domain_path, res, basepath, templategrid_path):
     import xarray as xr
     import numpy as np
     #import pdb # pdb.set_trace()
-    from preproc_tools import makedirs
+    from preproc_tools import makedirs, safe_clip
 
 
     ## Bounds from shapefile
@@ -122,8 +122,9 @@ def soil(domain_path, res, basepath, templategrid_path):
         mosaic = mosaic.rio.reproject_match(to_match) # reproject to match templategrid
 
         # Clipping with mask and save output files
-        mosaic = mosaic.rio.clip(mask.geometry.values, mask.crs)
-        mosaic = mosaic.drop_vars('band')
+        #mosaic = mosaic.rio.clip(mask.geometry.values, mask.crs)
+        mosaic = safe_clip(mosaic, mask)
+        #mosaic = mosaic.drop_vars('band')
         target_dir = makedirs(basepath, 'processed', '')
         targetfile = os.path.join(target_dir, 'soil_' + depth[1:-5] + '.nc')
         mosaic.to_netcdf(targetfile)

@@ -1,6 +1,7 @@
 name: aquacropgrid-preproc
 channels:
   - defaults
+  - conda-forge
 dependencies:
   - python=3.10
   - numpy
@@ -11,12 +12,11 @@ dependencies:
   - geopandas
   - rasterio
   - pandas
-  - conda-forge::cdsapi
+  - cdsapi
   - netcdf4
-  - conda-forge::rioxarray
+  - rioxarray
   - owslib
-  - conda-forge::soilgrids
-  - conda-forge::dask
+  - soilgrids
   - pip
   - pip:
     - aquacrop

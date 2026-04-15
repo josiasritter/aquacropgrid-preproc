@@ -11,7 +11,7 @@ import glob
 import time
 import requests
 from zipfile import ZipFile
-import pdb # pdb.set_trace()
+#import pdb # pdb.set_trace()
 
 import rioxarray
 from shapely.geometry import mapping, box
@@ -106,6 +106,9 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
 
     # Merge data into one file
     src_mosaic = xr.merge(file_to_mosaic)
+    src_mosaic = src_mosaic.rio.write_crs(4326)      # adds spatial_ref coordinate with crs_wkt
+    #for var in src_mosaic.data_vars:               # ensure every data variable references the CRS
+    #    src_mosaic[var].attrs['grid_mapping'] = 'spatial_ref'
     target_dir = makedirs(basepath, 'processed', '')
     targetfile = os.path.join(target_dir, 'spam' + refyear + '_' + spam_variable + '.nc')
     src_mosaic.to_netcdf(targetfile)
@@ -144,18 +147,19 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     src = ensure_xy_dims(src)
     src.rio.write_crs(4326, inplace=True)
 
-    # Resample to project grid and mask (before gap-filling to prevent ET0 NaNs)
+    # Resample to project grid (before gap-filling to prevent ET0 NaNs)
     src_reproj = src.rio.reproject_match(to_match, resampling=Resampling.nearest)
-    src_masked = src_reproj.where(to_match['Band1'] == 1)
 
     # Fill missing values in data variables (using nearest-neighbour interpolation)
     import scipy.ndimage as ndi
-    variables = list(src.data_vars)
+    variables = list(src_reproj.data_vars)
     for variab in variables:    # Loop to make it work also for InitSoilwater data, which has four data variables (corresponding to four soil depths)
-        data3d = src[variab].to_numpy()
-        nodata_mask = np.isnan(data3d[0])  # This assumes that all timesteps have the same missing cells (fair assumption, since the same ERA5-land water mask is applied to all time steps)
+        data3d = src_reproj[variab].to_numpy()
+        nodata_mask = np.isnan(data3d[0])  # This assumes that all timesteps have the same missing cells (fair assumption, since the same land water mask is applied to all time steps)
         dist, nearest_indices = ndi.distance_transform_edt(nodata_mask, return_indices=True)  # Nearest-neighbour interpolation
-        src[variab].data = data3d[:, nearest_indices[0], nearest_indices[1]]
+        src_reproj[variab].data = data3d[:, nearest_indices[0], nearest_indices[1]]
+
+    src_masked = src_reproj.where(to_match['Band1'] == 1)
 
     # Prepare output directory
     target_dir = makedirs(basepath, 'processed', '')
@@ -164,8 +168,11 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     # Save to disk. Drop singleton dimensions and auxiliary coordinates before saving
     src_masked = src_masked.squeeze(drop=True)
     src_masked = src_masked.drop_vars('spatial_ref', errors='ignore')
+    src_masked = src_masked.rio.write_crs(4326)  # adds spatial_ref coordinate with crs_wkt
+    for var in src_masked.data_vars:             # ensure every data variable references the CRS (required by QGIS)
+        src_masked[var].encoding.pop('grid_mapping', None)
+        src_masked[var].attrs['grid_mapping'] = 'spatial_ref'
     src_masked.to_netcdf(targetfile, mode='w', encoding={variables[0]: {'zlib': True, 'complevel': 4}})
-
 
 def agera5_merge_yearly(target_dir, yearfile):
     import glob
@@ -173,16 +180,75 @@ def agera5_merge_yearly(target_dir, yearfile):
     unzip_all(target_dir) 
     yearfolder = os.path.splitext(yearfile)[0]
     nc_files = sorted(glob.glob(os.path.join(yearfolder, '*.nc')))
-    
-    # Combining files safely in windows (no files left open)
-    with xr.open_mfdataset(nc_files) as combined:
-        combined = combined.sortby('time')
-        combined.to_netcdf(yearfile)
-    
+    datasets = [xr.open_dataset(f) for f in nc_files]
+    combined = xr.concat(datasets, dim='time')
+    combined = combined.sortby('time')
+    combined = combined.rio.write_crs(4326)      # adds spatial_ref coordinate with crs_wkt
+    for var in combined.data_vars:               # ensure every data variable references the CRS (required by QGIS)
+        combined[var].encoding.pop('grid_mapping', None)
+        combined[var].attrs['grid_mapping'] = 'spatial_ref'
+    combined.to_netcdf(yearfile)
     shutil.rmtree(yearfolder)  # remove unzipped folder to save space
 
 
 ## Helper functions
+
+def safe_clip(src, mask):
+    """
+    Clip a raster (src) using geometries from mask, skipping polygons
+    that fall entirely in nodata regions or outside the raster extent.
+
+    Parameters
+    ----------
+    src : rioxarray.DataArray
+        The source raster opened with rioxarray.
+    mask : geopandas.GeoDataFrame
+        Polygon(s) to clip with. Can be MultiPolygon.
+
+    Returns
+    -------
+    xarray.DataArray
+        Clipped raster with same CRS and structure as src.
+    """
+    # Ensure CRS match
+    if mask.crs != src.rio.crs:
+        mask = mask.to_crs(src.rio.crs)
+
+    # Explode multipolygons
+    mask_exploded = mask.explode(ignore_index=True)
+
+    # Get raster bounds as shapely box
+    raster_bounds = box(*src.rio.bounds())
+
+    valid_clips = []
+
+    for i, geom in enumerate(mask_exploded.geometry):
+        # Skip polygons completely outside raster extent
+        if not geom.intersects(raster_bounds):
+            continue
+        try:
+            clipped = src.rio.clip([mapping(geom)], src.rio.crs, drop=False) # drop=True changed to False to ensure all output rasters have the same dimensions.
+            # Only keep if it actually contains data
+            if clipped.notnull().any():
+                valid_clips.append(clipped)
+        except rioxarray.exceptions.NoDataInBounds:
+            continue
+
+    # If no valid clips, return empty raster with same structure
+    if not valid_clips:
+        print("Warning: no valid polygons contained data.")
+        empty = src.copy(deep=True)
+        empty[:] = src.rio.nodata
+        return empty
+
+    # Merge the valid clipped parts into one raster
+    combined = xr.concat(valid_clips, dim="band").max(dim="band")
+
+    # Preserve metadata & CRS
+    combined.rio.write_crs(src.rio.crs, inplace=True)
+    combined.attrs.update(src.attrs)
+
+    return combined
 
 def basegrid(domain_shape_path, resolution, templategrid_path):    # Creates basic raster file as template for all preprocessing scripts (i.e. what is read in all other scripts as "to_match" file)
     from rasterio.transform import from_origin
@@ -219,20 +285,22 @@ def basegrid(domain_shape_path, resolution, templategrid_path):    # Creates bas
         transform = Affine.translation(xmin, ymax) * Affine.scale(resolution, -resolution)
 
         # Mask: True = inside polygon
-        mask = features.geometry_mask([full_geom],out_shape=(h, w),transform=transform,invert=True)
+        mask_bin = features.geometry_mask([full_geom],out_shape=(h, w),transform=transform,invert=True)
 
         # Create data array: inside = 1, outside = nodata
         nodata_value = 0
         data = np.full((h, w), nodata_value, dtype=np.uint8)
-        data[mask] = 1
+        data[mask_bin] = 1
 
         # CF convention prefers descending latitudes
         lats = lats[::-1]
 
         # Create xarray Dataset
         ds = xr.Dataset({"Band1": (["y", "x"], data),},coords={"y": lats,"x": lons,},attrs={"Conventions": "CF-1.8","title": "Template raster from polygon shapefile","crs": "EPSG:4326"})
-        ds["spatial_ref"] = xr.DataArray(0, attrs={"grid_mapping_name": "latitude_longitude", "epsg_code": 4326, "semi_major_axis": 6378137.0, "inverse_flattening": 298.257223563, "long_name": "CRS definition"})
-        ds["Band1"].attrs.update({"grid_mapping": "spatial_ref", "_FillValue": nodata_value, "missing_value": nodata_value})
+        ds["crs"] = xr.DataArray(0, attrs={"grid_mapping_name": "latitude_longitude", "epsg_code": 4326, "semi_major_axis": 6378137.0, "inverse_flattening": 298.257223563, "long_name": "CRS definition"})
+        ds["Band1"].attrs.update({"grid_mapping": "crs", "_FillValue": nodata_value, "missing_value": nodata_value})
+        ds.rio.write_crs(4326, inplace=True)
+        ds = safe_clip(ds, mask)  # Clip to polygon to ensure clean edges (removes pixels that are only partially covered by the polygon, which can cause issues in some preprocessing steps)
 
         # Save to NetCDF
         ds.to_netcdf(templategrid_path)
@@ -257,60 +325,3 @@ def makedirs(basepath, level1, level2):
         os.mkdir(level2_dir)
     return level2_dir
 
-
-def safe_clip(src, mask):
-    """
-    Clip a raster (src) using geometries from mask, skipping polygons
-    that fall entirely in nodata regions or outside the raster extent.
-
-    Parameters
-    ----------
-    src : rioxarray.DataArray
-        The source raster opened with rioxarray.
-    mask : geopandas.GeoDataFrame
-        Polygon(s) to clip with. Can be MultiPolygon.
-
-    Returns
-    -------
-    xarray.DataArray
-        Clipped raster with same CRS and structure as src.
-    """
-    # Ensure CRS match
-    if mask.crs != src.rio.crs:
-        mask = mask.to_crs(src.rio.crs)
-
-    # Explode multipolygons
-    mask_exploded = mask.explode(ignore_index=True)
-
-    # Get raster bounds as shapely box
-    raster_bounds = box(*src.rio.bounds())
-
-    valid_clips = []
-
-    for i, geom in enumerate(mask_exploded.geometry):
-        # Skip polygons completely outside raster extent
-        if not geom.intersects(raster_bounds):
-            continue
-        try:
-            clipped = src.rio.clip([mapping(geom)], src.rio.crs, drop=True)
-            # Only keep if it actually contains data
-            if clipped.notnull().any():
-                valid_clips.append(clipped)
-        except rioxarray.exceptions.NoDataInBounds:
-            continue
-
-    # If no valid clips, return empty raster with same structure
-    if not valid_clips:
-        print("Warning: no valid polygons contained data.")
-        empty = src.copy(deep=True)
-        empty[:] = src.rio.nodata
-        return empty
-
-    # Merge the valid clipped parts into one raster
-    combined = xr.concat(valid_clips, dim="band").max(dim="band")
-
-    # Preserve metadata & CRS
-    combined.rio.write_crs(src.rio.crs, inplace=True)
-    combined.attrs.update(src.attrs)
-
-    return combined

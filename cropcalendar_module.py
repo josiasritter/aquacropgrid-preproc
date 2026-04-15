@@ -7,7 +7,7 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
     import rioxarray as rio
     from shapely.geometry import mapping
     from rasterio.warp import Resampling
-    from preproc_tools import download_url, unzip_all, ensure_xy_dims, makedirs
+    from preproc_tools import download_url, unzip_all, ensure_xy_dims, makedirs, safe_clip
     from xarray.coding.times import CFTimedeltaCoder
 
     # For reprojecting and clipping
@@ -63,7 +63,8 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
 
         # Reproject and clip to model domain
         src_proj = src.rio.reproject_match(to_match)#, resampling=Resampling.nearest)  # nearest-neighbor
-        src_clip = src_proj.rio.clip(mask.geometry.apply(mapping))
+        #src_clip = src_proj.rio.clip(mask.geometry.apply(mapping))
+        src_clip = safe_clip(src_proj, mask)
 
         # Rename variables from FAO crop ID to crop strings used by AquaCrop
         layername_base = crop_dict.get(cropID) + '_' + technique

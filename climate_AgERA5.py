@@ -16,7 +16,7 @@ import os
 import geopandas as gpd
 import cdsapi
 from shapely.geometry import mapping
-import pdb
+#import pdb # pdb.set_trace()
 
 from preproc_tools import agera5_merge_yearly, preproc_agera5, basegrid, makedirs, unzip_all
 
@@ -124,7 +124,9 @@ def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_
 
     # Define area and grid resolution to be downloaded (bounding box)
     templategrid_path = os.path.join(basepath, 'template_grid.nc')
-    to_match, bounds = basegrid(domain_path, cell_resolution, templategrid_path) # KEEP HERE FOR NOW IN CASE CLIMATE PREPROCESSING BECOMES SEPARATE PACKAGE
+    _tpl = xr.open_dataset(templategrid_path)           # Read spatial extent from template grid file
+    _tpl.rio.write_crs(4326, inplace=True)
+    bounds = list(_tpl.rio.bounds())                    # [xmin, ymin, xmax, ymax]
     bounds=[bounds[3],bounds[0],bounds[1],bounds[2]]    # reorder bounds to follow ERA5 CDS definition (N-W-S-E)
 
     # Prepare download directory
