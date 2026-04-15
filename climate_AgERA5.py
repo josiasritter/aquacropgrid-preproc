@@ -117,7 +117,7 @@ def ensure_cds_dns(hostname="cds.climate.copernicus.eu"):
 
 
 # Continue with main script functionality
-def climate_AgERA5(basepath, domain_path, start_year, end_year, api_token, cell_resolution, variables=['MinTemp','MaxTemp','Precipitation','ReferenceET','InitSoilwater']):
+def climate_AgERA5(basepath, start_year, end_year, api_token, to_match, variables=['MinTemp','MaxTemp','Precipitation','ReferenceET','InitSoilwater']):
 
     ## Years to be downloaded
     yearlist = list(range(start_year, end_year+1))
