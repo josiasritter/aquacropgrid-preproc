@@ -188,6 +188,11 @@ def agera5_merge_yearly(target_dir, yearfile):
         combined[var].encoding.pop('grid_mapping', None)
         combined[var].attrs['grid_mapping'] = 'spatial_ref'
     combined.to_netcdf(yearfile)
+    
+    # Close all file handles before deleting
+    for ds in datasets:
+        ds.close()
+    
     shutil.rmtree(yearfolder)  # remove unzipped folder to save space
 
 
