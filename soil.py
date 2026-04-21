@@ -124,6 +124,9 @@ def soil(domain_path, res, basepath, templategrid_path):
         # Clipping with mask and save output files
         #mosaic = mosaic.rio.clip(mask.geometry.values, mask.crs)
         mosaic = safe_clip(mosaic, mask)
+        # safe_clip leaves a per-sub-polygon band dim on Datasets; collapse it here
+        if 'band' in mosaic.dims:
+            mosaic = mosaic.max(dim='band', skipna=True)
         #mosaic = mosaic.drop_vars('band')
         target_dir = makedirs(basepath, 'processed', '')
         targetfile = os.path.join(target_dir, 'soil_' + depth[1:-5] + '.nc')
