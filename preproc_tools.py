@@ -279,6 +279,7 @@ def basegrid(domain_shape_path, resolution, templategrid_path):    # Creates bas
 
     if os.path.exists(templategrid_path):
         ds = xr.open_dataset(templategrid_path)
+        ds.rio.write_crs(4326, inplace=True)
 
     else:
         w = round((xmax - xmin) / resolution)
