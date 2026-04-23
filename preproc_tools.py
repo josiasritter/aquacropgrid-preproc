@@ -227,13 +227,15 @@ def safe_clip(src, mask):
 
     valid_clips = []
 
-    for i, geom in enumerate(mask_exploded.geometry):
-        # Skip polygons completely outside raster extent
+    for geom in mask_exploded.geometry:
         if not geom.intersects(raster_bounds):
             continue
         try:
-            clipped = src.rio.clip([mapping(geom)], src.rio.crs, drop=False) # drop=True changed to False to ensure all output rasters have the same dimensions.
-            # Only keep if it actually contains data
+            clipped = src.rio.clip([mapping(geom)], src.rio.crs, drop=False)
+            # rioxarray adds a singleton 'band' dim — drop it now so it doesn't
+            # stack when we merge clips from multiple sub-polygons
+            if "band" in clipped.dims and clipped.sizes["band"] == 1:
+                clipped = clipped.squeeze("band", drop=True)
             if clipped.notnull().any():
                 valid_clips.append(clipped)
         except rioxarray.exceptions.NoDataInBounds:
@@ -244,10 +246,16 @@ def safe_clip(src, mask):
         print("Warning: no valid polygons contained data.")
         empty = src.copy(deep=True)
         empty[:] = src.rio.nodata
+        if "band" in empty.dims and empty.sizes["band"] == 1:
+            empty = empty.squeeze("band", drop=True)
         return empty
 
-    # Merge the valid clipped parts into one raster
-    combined = xr.concat(valid_clips, dim="band").max(dim="band")
+    # Merge clips: start from the first, fill NaN cells from each subsequent one.
+    # This works identically for Datasets and DataArrays and avoids the
+    # concat+max pattern that failed to collapse the band dim on Datasets.
+    combined = valid_clips[0]
+    for clip in valid_clips[1:]:
+        combined = combined.combine_first(clip)
 
     # Preserve metadata & CRS
     combined.rio.write_crs(src.rio.crs, inplace=True)
