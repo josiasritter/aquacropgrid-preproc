@@ -127,6 +127,7 @@ def climate_AgERA5(basepath, start_year, end_year, api_token, to_match, variable
     _tpl = xr.open_dataset(templategrid_path)           # Read spatial extent from template grid file
     _tpl.rio.write_crs(4326, inplace=True)
     bounds = list(_tpl.rio.bounds())                    # [xmin, ymin, xmax, ymax]
+    bounds = [round(b,2) for b in bounds]               # round coordinates to shorten filenames (Windows limitation)
     bounds=[bounds[3],bounds[0],bounds[1],bounds[2]]    # reorder bounds to follow ERA5 CDS definition (N-W-S-E)
 
     # Prepare download directory
