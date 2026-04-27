@@ -314,7 +314,6 @@ def basegrid(domain_shape_path, resolution, templategrid_path):    # Creates bas
         ds["crs"] = xr.DataArray(0, attrs={"grid_mapping_name": "latitude_longitude", "epsg_code": 4326, "semi_major_axis": 6378137.0, "inverse_flattening": 298.257223563, "long_name": "CRS definition"})
         ds["Band1"].attrs.update({"grid_mapping": "crs", "_FillValue": nodata_value, "missing_value": nodata_value})
         ds.rio.write_crs(4326, inplace=True)
-        ds = safe_clip(ds, mask)  # Clip to polygon to ensure clean edges (removes pixels that are only partially covered by the polygon, which can cause issues in some preprocessing steps)
 
         # Save to NetCDF
         ds.to_netcdf(templategrid_path)
