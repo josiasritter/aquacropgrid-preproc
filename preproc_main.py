@@ -4,9 +4,12 @@ User inputs:
     - path to a vector polygon file (shape) representing the model domain
     - time period to me modelled (start year and end year)
     - personal api token from the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
-    - desired cell resolution (default 3 arcmin = 0.05 degrees latitude/longitude). For now, only 0.05 degrees works. User-defined cell size will be added in the future.
+    - desired cell resolution (default 3 arcmin = 0.05 degrees latitude/longitude). Higher resolution may be possible for smaller domains, but keep in mind that the spatial resolution of most input datasets is quite coarse (e.g. 0.25 degrees for future climate data), so higher resolution may not always be useful and may lead to longer processing times and larger file sizes.
 Script generates preprocessed datasets (grids) containing:
-    - Climate data in daily time step (precipitation, evapotranspiration, minimum temperature, maximum temperature, and initial soil moisture) from ERA5 and ERA5-land data
+    - Climate data in daily time step (precipitation, evapotranspiration, minimum temperature, maximum temperature, and initial soil moisture).
+      Source is chosen automatically based on the requested time period:
+        * Both start_year and end_year are in the past (< current year): AgERA5 reanalysis via Copernicus CDS
+        * end_year is in the future (>= current year): NASA NEX-GDDP-CMIP6 climate projections
     - Soil data (content of clay, sand, silt, and soil organic matter) for six soil depth layers from ISCRIC Soilgrids data
     - Crop cultivation areas (for all supported crop types) from SPAM data
     - Crop planting and harvesting calendars (for all supported crop types) from GGCMI data
@@ -19,15 +22,22 @@ from validate_inputs import validate_inputs
 
 ## INPUT ARGUMENTS. REPLACE THESE WITH YOUR OWN VALUES
 workingdirectory = os.getcwd()   # your home directory
-#domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
+domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
 #domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
-domain_path = os.path.join(workingdirectory, 'inputdata', 'germany', 'niedersachsen.geojson')   # location and name of your domain shapefile (polygon file representing the model domain). Must be in lat/lon (EPSG:4326) projection.
-start_year = 2008
-end_year = 2009
-api_token = 'xxx'  # your API token, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
+#domain_path = os.path.join(workingdirectory, 'inputdata', 'germany', 'niedersachsen.geojson')   # location and name of your domain shapefile (polygon file representing the model domain). Must be in lat/lon (EPSG:4326) projection.
+cell_resolution = 0.05 # cell resolution in degrees (e.g. 0.05 for 3 arcmin). Resolution of 0.05 degrees is reasonable given the coarse spatial resolution of most input datasets.
+start_year = 2030
+end_year = 2031
+api_token = 'xxx'  # your API token when using AgERA5 as climate input, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
+
+# NASA NEX-GDDP-CMIP6 settings (used for climate projection inputs when end_year >= current year)
+nasanex_model    = 'GFDL-CM4'   # CMIP6 model; see https://ds.nccs.nasa.gov/thredds/catalog/AMES/NEX/GDDP-CMIP6/catalog.html
+nasanex_scenario = 'ssp245'     # SSP scenario for years >= 2015: 'ssp126', 'ssp245', 'ssp370', 'ssp585'
+nasanex_ensemble = 'r1i1p1f1'   # ensemble member (check catalog for model-specific members)
 
 ##
-def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cell_resolution=0.05, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate']):
+def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cell_resolution=0.05, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate'],
+                        nasanex_model='GFDL-CM4', nasanex_scenario='ssp245', nasanex_ensemble='r1i1p1f1'):
     workingdirectory = os.getcwd()  # your home directory
 
     # Validate user inputs
@@ -55,10 +65,23 @@ def aquacropgrid_preproc(domain_shape_path, start_year, end_year, api_token, cel
         from cropcalendar_module import cropcalendar 
         cropcalendar(domain_shape_path, workingdirectory, templategrid_path)
 
-    # Download and preprocess climate data (from AgERA5) and initial soil moisture (from ERA5-Land) from the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
+    # Download and preprocess climate data.
+    # Source selection:
+    #   AgERA5 reanalysis  – both years within its availability window (1979 to last complete year)
+    #   NASA NEX-GDDP-CMIP6 – any other case (start_year < 1979 or end_year >= current year)
     if 'climate' in preprocess:
-        from climate_AgERA5 import climate_AgERA5
-        climate_AgERA5(workingdirectory, start_year, end_year, api_token, to_match)#, variables=['MaxTemp'])  # for testing 
+        import datetime
+        current_year = datetime.date.today().year
+        AGERA5_START = 1979
+        use_agera5 = (start_year >= AGERA5_START) and (end_year < current_year)
+        if use_agera5:
+            from climate_AgERA5 import climate_AgERA5
+            climate_AgERA5(workingdirectory, start_year, end_year, api_token, to_match)
+        else:
+            from climate_nasanex import climate_nasanex
+            climate_nasanex(workingdirectory, start_year, end_year, to_match,
+                            model=nasanex_model, scenario=nasanex_scenario, ensemble=nasanex_ensemble)
 
 ## Run preprocessing
-aquacropgrid_preproc(domain_path, start_year, end_year, api_token, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate'])
+aquacropgrid_preproc(domain_path, start_year, end_year, api_token, cell_resolution=cell_resolution, preprocess=['soil', 'crop_areas', 'cropcalendar', 'climate'],
+                     nasanex_model=nasanex_model, nasanex_scenario=nasanex_scenario, nasanex_ensemble=nasanex_ensemble)

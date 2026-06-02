@@ -137,6 +137,7 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
         src = src.drop_vars(['crs'])
     if variable in ['MinTemp', 'MaxTemp']:
         src = src - 273.15  # Convert from Kelvin to Celsius
+        src[variable].attrs['units'] = 'degC'
     if variable in ['Precipitation', 'ReferenceET']:
         src[variable] = src[variable].where(src[variable] >= 0, 0)  # Set negative precipitation and evaporation values to 0.
     if variable in ['InitSoilwater']:
@@ -162,7 +163,7 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     src_masked = src_reproj.where(to_match['Band1'] == 1)
 
     # Prepare output directory
-    target_dir = makedirs(basepath, 'processed', '')
+    target_dir = makedirs(basepath, 'processed', 'climate')
     targetfile = os.path.join(target_dir, variable + str(yearlist[0]) + str(yearlist[-1]) + '.nc')
 
     # Save to disk. Drop singleton dimensions and auxiliary coordinates before saving

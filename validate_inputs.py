@@ -61,16 +61,35 @@ def validate_inputs(domain_path, start_year, end_year, api_token):
     for name, value in [("start_year", start_year), ("end_year", end_year)]:
         if not isinstance(value, (int, float)):
             raise TypeError(f"❌ {name} must be a numeric value.")
-        if not (1950 <= value <= current_year):
-            raise ValueError(f"❌ {name} must be between 1950 and {current_year}. Given: {value}")
+        if not (1950 <= value <= 2100):
+            raise ValueError(f"❌ {name} must be between 1950 and 2100. Given: {value}")
 
     if start_year > end_year:
         raise ValueError(f"❌ start_year ({start_year}) cannot be greater than end_year ({end_year}).")
 
-    # --- 7. Check API token ---
-    if not isinstance(api_token, str):
-        raise TypeError("❌ API token must be a string.")
-    if len(api_token.strip()) <= 30:
-        raise ValueError("❌ API token must be longer than 30 characters.")
+    # --- 7. Select climate data source and validate accordingly ---
+    # AgERA5 is available from 1979 up to (but not including) the current year.
+    # Use NASA NEX-GDDP-CMIP6 for any period outside that window.
+    AGERA5_START = 1979
+    use_agera5 = (start_year >= AGERA5_START) and (end_year < current_year)
+
+    if use_agera5:
+        print(f"ℹ️  Climate data source: AgERA5 reanalysis "
+              f"({start_year}–{end_year} falls within AgERA5 availability: "
+              f"{AGERA5_START}–{current_year - 1}).")
+        # Check API token only when AgERA5 will be used
+        if not isinstance(api_token, str):
+            raise TypeError("❌ API token must be a string.")
+        if len(api_token.strip()) <= 30:
+            raise ValueError("❌ API token must be longer than 30 characters. Retrieve it from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/).")
+    else:
+        print(f"ℹ️  Climate data source: NASA NEX-GDDP-CMIP6")
+        if start_year < AGERA5_START:
+            print(f"   Reason: start_year {start_year} is before AgERA5 availability (from {AGERA5_START}).")
+        if end_year >= current_year:
+            print(f"   Reason: end_year {end_year} extends into the future (current year: {current_year}).")
+        if start_year < current_year:
+            print(f"   Years {start_year}–{min(end_year, 2014)} will use the 'historical' scenario; "
+                  f"years {max(start_year, 2015)}–{end_year} will use the specified SSP scenario.")
 
     print("✅ All input checks passed successfully.")
