@@ -163,7 +163,7 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     src_masked = src_reproj.where(to_match['Band1'] == 1)
 
     # Prepare output directory
-    target_dir = makedirs(basepath, 'processed', 'climate')
+    target_dir = makedirs(basepath, 'processed', '')
     targetfile = os.path.join(target_dir, variable + str(yearlist[0]) + str(yearlist[-1]) + '.nc')
 
     # Save to disk. Drop singleton dimensions and auxiliary coordinates before saving

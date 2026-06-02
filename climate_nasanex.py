@@ -292,7 +292,7 @@ def _calc_et0_xr(tasmin, tasmax, hurs, rsds, wind10m, elev=0.0):
 def _preproc_and_save(src, variable, yearlist, basepath, to_match, model, scenario, ensemble):
     """
     Reproject *src* to the project grid, gap-fill NaN, apply domain mask,
-    and write the result to processed/climate_future/.
+    and write the result to processed/.
 
     Parameters
     ----------
@@ -309,9 +309,11 @@ def _preproc_and_save(src, variable, yearlist, basepath, to_match, model, scenar
 
     src = ensure_xy_dims(src)
 
-    # Convert cftime/object time to proper datetime64[ns] before spatial ops
+    # Convert cftime/object time to proper datetime64[ns] and normalise to midnight
     try:
-        src = src.assign_coords(time=src.indexes['time'].to_datetimeindex())
+        src = src.assign_coords(
+            time=src.indexes['time'].to_datetimeindex().normalize()
+        )
     except (AttributeError, TypeError):
         pass  # already datetime64[ns]
 
@@ -336,8 +338,8 @@ def _preproc_and_save(src, variable, yearlist, basepath, to_match, model, scenar
     src_masked = src_reproj.where(to_match['Band1'] == 1)
 
     # Build output path
-    target_dir = makedirs(basepath, 'processed', 'climate_future')
-    out_name = f"{variable}_{yearlist[0]}{yearlist[-1]}.nc"
+    target_dir = makedirs(basepath, 'processed', '')
+    out_name = f"{variable}{yearlist[0]}{yearlist[-1]}.nc"
     targetfile = os.path.join(target_dir, out_name)
 
     # Drop singleton dims / auxiliary coords; re-attach CRS

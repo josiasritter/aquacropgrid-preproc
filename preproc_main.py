@@ -3,16 +3,16 @@ This script takes user-defined information (domain and time period to be modelle
 User inputs:
     - path to a vector polygon file (shape) representing the model domain
     - time period to me modelled (start year and end year)
-    - personal api token from the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
     - desired cell resolution (default 3 arcmin = 0.05 degrees latitude/longitude). Higher resolution may be possible for smaller domains, but keep in mind that the spatial resolution of most input datasets is quite coarse (e.g. 0.25 degrees for future climate data), so higher resolution may not always be useful and may lead to longer processing times and larger file sizes.
+    - personal api token from the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
 Script generates preprocessed datasets (grids) containing:
     - Climate data in daily time step (precipitation, evapotranspiration, minimum temperature, maximum temperature, and initial soil moisture).
       Source is chosen automatically based on the requested time period:
         * Both start_year and end_year are in the past (< current year): AgERA5 reanalysis via Copernicus CDS
         * end_year is in the future (>= current year): NASA NEX-GDDP-CMIP6 climate projections
     - Soil data (content of clay, sand, silt, and soil organic matter) for six soil depth layers from ISCRIC Soilgrids data
-    - Crop cultivation areas (for all supported crop types) from SPAM data
     - Crop planting and harvesting calendars (for all supported crop types) from GGCMI data
+    - Crop cultivation areas (for all supported crop types) from SPAM data
 """
 
 import os
@@ -22,12 +22,11 @@ from validate_inputs import validate_inputs
 
 ## INPUT ARGUMENTS. REPLACE THESE WITH YOUR OWN VALUES
 workingdirectory = os.getcwd()   # your home directory
-domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
-#domain_path = os.path.join(workingdirectory, 'inputdata', 'spain', 'galicia.geojson')
-#domain_path = os.path.join(workingdirectory, 'inputdata', 'germany', 'niedersachsen.geojson')   # location and name of your domain shapefile (polygon file representing the model domain). Must be in lat/lon (EPSG:4326) projection.
-cell_resolution = 0.05 # cell resolution in degrees (e.g. 0.05 for 3 arcmin). Resolution of 0.05 degrees is reasonable given the coarse spatial resolution of most input datasets.
+#domain_path = os.path.join(workingdirectory, 'inputdata', 'mekong', 'basin_outline', 'mekong_jrc_outline.geojson')
+domain_path = os.path.join(workingdirectory, 'inputdata', 'germany', 'niedersachsen.geojson')   # location and name of your domain shapefile (polygon file representing the model domain). Must be in lat/lon (EPSG:4326) projection.
 start_year = 2030
 end_year = 2031
+cell_resolution = 0.05 # cell resolution in degrees (e.g. 0.05 for 3 arcmin). Resolution of 0.05 degrees is reasonable given the coarse spatial resolution of most input datasets.
 api_token = 'xxx'  # your API token when using AgERA5 as climate input, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
 
 # NASA NEX-GDDP-CMIP6 settings (used for climate projection inputs when end_year >= current year)
