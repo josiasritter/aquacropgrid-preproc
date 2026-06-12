@@ -17,6 +17,7 @@ dependencies:
   - rioxarray
   - owslib
   - soilgrids
+  - dash-bootstrap-components
   - pip
   - pip:
     - aquacrop

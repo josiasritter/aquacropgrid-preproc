@@ -69,6 +69,10 @@ def cropcalendar(domain_path, basepath, referenceraster_path):
         # Rename variables from FAO crop ID to crop strings used by AquaCrop
         layername_base = crop_dict.get(cropID) + '_' + technique
         src_clip[layername_base + '_planting'] = src_clip['planting_day']
+        # Replace DOY 60 (Feb 29) with 61 (Mar 1) to avoid leap-year artefacts
+        src_clip[layername_base + '_planting'] = src_clip[layername_base + '_planting'].where(
+            src_clip[layername_base + '_planting'] != 60, 61
+        )
         #src_clip[layername_base + '_harvest'] = src_clip['maturity_day']
         src_clip[layername_base + '_growing_season_length'] = src_clip['growing_season_length']
 

@@ -179,8 +179,10 @@ def climate_AgERA5(basepath, start_year, end_year, api_token, to_match, variable
         # Preprocessing
         preproc_agera5(src, variable, yearlist, basepath, to_match)
 
-
-    ## Download Volumetric soil water content [m3/m3] for initial time step (has four soil depth layers) from ERA5-Land hourly (not available in AgERA5)
+    """
+    ## DISABLED AS GRIDDED INITIAL SOIL WATER CONTENT IS CURRENTLY NOT SUPPORTED AS INPUT FOR SIMULATIONS.
+    
+    ## Download soil water content [m3/m3] for initial time step (has four soil depth layers) from ERA5-Land hourly (not available in AgERA5)
     variable = 'InitSoilwater'
     if variable in variables:
         targetfile = os.path.join(target_dir, variable + str(start_year) + '.nc')
@@ -211,3 +213,4 @@ def climate_AgERA5(basepath, start_year, end_year, api_token, to_match, variable
         src = xr.open_dataset(targetfile)
         #preproc_era5(src, variable, yearlist, basepath, to_match)
         preproc_agera5(src, variable, yearlist, basepath, to_match)
+    """

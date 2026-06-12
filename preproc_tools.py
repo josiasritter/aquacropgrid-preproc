@@ -57,7 +57,7 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
     to_match.rio.write_crs(4326, inplace=True)
 
     # Dictionary that connects FAO crop ID's to crop names in AquaCrop. Used for layer naming
-    crop_dict = {'BARL': 'Barley','COTT': 'Cotton','BEAN': 'DryBean','MAIZ': 'Maize','RICE': 'PaddyRice','POTA': 'Potato','SORG': 'Sorghum','SOYB': 'Soybean','SUGB': 'SugarBeet','SUGC': 'SugarCane','SUNF': 'Sunflower','WHEA': 'Wheat_summer','CASS': 'Cassava'}
+    crop_dict = {'BARL': 'Barley','COTT': 'Cotton','BEAN': 'DryBean','MAIZ': 'Maize','RICE': 'PaddyRice','POTA': 'Potato','SORG': 'Sorghum','SOYB': 'Soybean','SUGB': 'SugarBeet','SUGC': 'SugarCane','SUNF': 'Sunflower','CASS': 'Cassava'}    # Wheat removed as it is in SPAM data aggregated for winter and summer wheat and hence not useful for AquaCrop. 
 
     # Dictionnary to rename technology
     tech_dict = {'R': 'rf', 'I': 'ir'}
@@ -124,7 +124,7 @@ def spam_refyear(start_year, end_year):
 
     return refyear
 
-## Preprocessing climate data from AgERA5 (and soil water content from ERA5-Land)
+## Preprocessing climate data from AgERA5 (and soil water content from ERA5-Land but this is currently not supported as input to simulations)
 def preproc_agera5(src, variable, yearlist, basepath, to_match):
     print("        *** PREPROCESSING CLIMATE DATA: " + variable + " ***")
 
