@@ -1,7 +1,8 @@
-def crop_areas(domain_path, spam_variable, start_year, end_year, basepath, to_match):
+import os
+from preproc_tools import spam_refyear, preproc_spam, makedirs, download_url, unzip_all
 
-    import os
-    from preproc_tools import spam_refyear, preproc_spam, makedirs, download_url, unzip_all
+
+def crop_areas(domain_path, spam_variable, start_year, end_year, basepath, to_match, mask=None):
 
     # Define most suitable reference year of crop mask
     refyear = spam_refyear(start_year, end_year)
@@ -57,4 +58,4 @@ def crop_areas(domain_path, spam_variable, start_year, end_year, basepath, to_ma
     targetfile = os.path.join(target_dir, 'spam' + refyear + '_' + spam_variable + '.nc')
     if not os.path.exists(targetfile):  # Skip processing if file already exists
         print(f"Processing SPAM data for model domain and saving to {targetfile}")
-        preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match)
+        preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match, mask=mask)

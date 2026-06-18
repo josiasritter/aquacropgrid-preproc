@@ -190,78 +190,87 @@ def _calc_et0_xr(tasmin, tasmax, hurs, rsds, wind10m, elev=0.0):
     -------
     et0 : xr.DataArray [mm day⁻¹], non-negative, named 'ReferenceET'
     """
-    # --- Physical constants --------------------------------------------------
-    Gsc  = 0.0820    # solar constant              [MJ m⁻² min⁻¹]
-    sbc  = 4.903e-9  # Stefan-Boltzmann constant   [MJ m⁻² day⁻¹ K⁻⁴]
-    alb  = 0.23      # grass albedo (FAO-56)
-    Cn   = 900.0     # short-crop numerator constant
-    Cd   = 0.34      # short-crop denominator constant
-    G    = 0.0       # soil heat flux ≈ 0 for daily time step
+    # Cast all inputs to float32 so intermediates stay in float32, halving memory vs float64
+    f = np.float32
+    tasmin  = tasmin.astype(f)
+    tasmax  = tasmax.astype(f)
+    hurs    = hurs.astype(f)
+    rsds    = rsds.astype(f)
+    wind10m = wind10m.astype(f)
+
+    # --- Physical constants (float32 to keep arithmetic in float32) ----------
+    Gsc  = f(0.0820)    # solar constant              [MJ m⁻² min⁻¹]
+    sbc  = f(4.903e-9)  # Stefan-Boltzmann constant   [MJ m⁻² day⁻¹ K⁻⁴]
+    alb  = f(0.23)      # grass albedo (FAO-56)
+    Cn   = f(900.0)     # short-crop numerator constant
+    Cd   = f(0.34)      # short-crop denominator constant
+    G    = f(0.0)       # soil heat flux ≈ 0 for daily time step
 
     # --- Atmospheric pressure and psychrometric constant ---------------------
-    AtmP = 101.3 * ((293.0 - 0.0065 * elev) / 293.0) ** 5.26  # [kPa]
-    psy  = 0.000665 * AtmP                                       # [kPa °C⁻¹]
+    AtmP = f(101.3) * ((f(293.0) - f(0.0065) * f(elev)) / f(293.0)) ** f(5.26)  # [kPa]
+    psy  = f(0.000665) * AtmP                                                      # [kPa °C⁻¹]
 
     # --- Wind speed: 10 m → 2 m  (FAO-56 Eq. 47) ----------------------------
-    u2 = wind10m * (4.87 / np.log(67.8 * 10.0 - 5.42))
+    u2 = wind10m * f(4.87 / np.log(67.8 * 10.0 - 5.42))  # pre-compute scalar as float32
 
     # --- Temperature and humidity --------------------------------------------
-    tmean = (tasmax + tasmin) / 2.0
-    rh    = hurs.clip(0.0, 100.0)
+    tmean = (tasmax + tasmin) * f(0.5)
+    rh    = hurs.clip(f(0.0), f(100.0))
 
     # Saturation vapour pressure [kPa]
-    e0max = 0.6108 * np.exp(17.27 * tasmax / (tasmax + 237.3))
-    e0min = 0.6108 * np.exp(17.27 * tasmin / (tasmin + 237.3))
-    es    = (e0max + e0min) / 2.0
+    e0max = f(0.6108) * np.exp(f(17.27) * tasmax / (tasmax + f(237.3)))
+    e0min = f(0.6108) * np.exp(f(17.27) * tasmin / (tasmin + f(237.3)))
+    es    = (e0max + e0min) * f(0.5)
 
     # Actual vapour pressure [kPa]
-    ea = (rh / 100.0) * es
+    ea = (rh * f(0.01)) * es
 
     # Slope of saturation vapour pressure curve [kPa °C⁻¹]
     Delta = (
-        4098.0 * 0.6108 * np.exp(17.27 * tmean / (tmean + 237.3))
-    ) / (tmean + 237.3) ** 2
+        f(4098.0) * f(0.6108) * np.exp(f(17.27) * tmean / (tmean + f(237.3)))
+    ) / (tmean + f(237.3)) ** f(2.0)
 
     # --- Radiation -----------------------------------------------------------
     # Julian day of year (1-D along 'time')
-    J = tasmin.time.dt.dayofyear.astype(float)
+    J = tasmin.time.dt.dayofyear.astype(np.float32)
 
     # Latitude in radians (1-D along 'y')
-    lat_rad = np.deg2rad(tasmin.y)
+    lat_rad = np.deg2rad(tasmin.y.astype(np.float32))
 
     # Inverse relative Earth-Sun distance and solar declination
-    dr       = 1.0 + 0.033 * np.cos(2.0 * np.pi / 365.0 * J)
-    sol_decl = 0.409 * np.sin(2.0 * np.pi / 365.0 * J - 1.39)
+    pi365    = f(2.0 * np.pi / 365.0)  # pre-computed float32 constant
+    dr       = f(1.0) + f(0.033) * np.cos(pi365 * J)
+    sol_decl = f(0.409) * np.sin(pi365 * J - f(1.39))
 
     # Sunset hour angle [rad]:  (-tan φ · tan δ) must be clamped to [-1, 1]
     # xarray broadcasts (y,) × (time,)  →  (time, y) automatically
-    arccos_arg = (-np.tan(lat_rad) * np.tan(sol_decl)).clip(-1.0, 1.0)
+    arccos_arg = (-np.tan(lat_rad) * np.tan(sol_decl)).clip(f(-1.0), f(1.0))
     ws = np.arccos(arccos_arg)  # shape (time, y)
 
     # Extraterrestrial radiation [MJ m⁻² day⁻¹]  shape (time, y)
     Ra = (
-        (24.0 * 60.0 / np.pi) * Gsc * dr * (
+        f(24.0 * 60.0 / np.pi) * Gsc * dr * (
             ws * np.sin(lat_rad) * np.sin(sol_decl)
             + np.cos(lat_rad) * np.cos(sol_decl) * np.sin(ws)
         )
     )
 
     # Net shortwave radiation [MJ m⁻² day⁻¹]  shape (time, y, x)
-    Rns = (1.0 - alb) * rsds
+    Rns = (f(1.0) - alb) * rsds
 
     # Clear-sky radiation [MJ m⁻² day⁻¹];  avoid division by zero (polar night)
-    Rs0 = (0.75 + 2.0e-5 * elev) * Ra
-    Rs0 = Rs0.where(Rs0 > 0.0, other=np.nan)
+    Rs0 = (f(0.75) + f(2.0e-5) * f(elev)) * Ra
+    Rs0 = Rs0.where(Rs0 > f(0.0), other=f(np.nan))
 
     # Cloudiness fraction, clamped to [0.05, 1.0]
-    fcd = (1.35 * rsds / Rs0 - 0.35).clip(0.05, 1.0)
-    fcd = fcd.where(Ra > 0.0, other=0.05)  # set to minimum during polar night
+    fcd = (f(1.35) * rsds / Rs0 - f(0.35)).clip(f(0.05), f(1.0))
+    fcd = fcd.where(Ra > f(0.0), other=f(0.05))  # set to minimum during polar night
 
     # Net longwave radiation [MJ m⁻² day⁻¹]
     Rnl = (
         sbc * fcd
-        * (0.34 - 0.14 * np.sqrt(ea.clip(0.0)))
-        * (((tasmax + 273.16) ** 4 + (tasmin + 273.16) ** 4) / 2.0)
+        * (f(0.34) - f(0.14) * np.sqrt(ea.clip(f(0.0))))
+        * (((tasmax + f(273.16)) ** f(4.0) + (tasmin + f(273.16)) ** f(4.0)) * f(0.5))
     )
 
     # Net radiation [MJ m⁻² day⁻¹]
@@ -269,12 +278,12 @@ def _calc_et0_xr(tasmin, tasmax, hurs, rsds, wind10m, elev=0.0):
 
     # --- FAO-56 PM ET₀ [mm day⁻¹] -------------------------------------------
     et0 = (
-        0.408 * Delta * (Rn - G)
-        + psy * (Cn / (tmean + 273.0)) * u2 * (es - ea)
-    ) / (Delta + psy * (1.0 + Cd * u2))
+        f(0.408) * Delta * (Rn - G)
+        + psy * (Cn / (tmean + f(273.0))) * u2 * (es - ea)
+    ) / (Delta + psy * (f(1.0) + Cd * u2))
 
     # Set ET₀ to 0 during polar night and floor at 0
-    et0 = et0.where(Ra > 0.0, other=0.0).clip(0.0)
+    et0 = et0.where(Ra > f(0.0), other=f(0.0)).clip(f(0.0))
 
     et0.name = 'ReferenceET'
     et0.attrs.update({
@@ -494,65 +503,83 @@ def climate_nasanex(
     # Step 2 – Helper: load and concatenate yearly files for one NEX var
     # ------------------------------------------------------------------
     def _load_years(nex_var):
-        files = []
-        for year in yearlist:
-            scen = _scenario_for_year(year, scenario)
-            files.append(
-                os.path.join(target_dir, f"{nex_var}_{model}_{scen}_{year}.nc")
-            )
-        datasets = [xr.open_dataset(f) for f in files]
-        ds = xr.concat(datasets, dim='time').sortby('time')
+        files = [
+            os.path.join(target_dir, f"{nex_var}_{model}_{_scenario_for_year(year, scenario)}_{year}.nc")
+            for year in yearlist
+        ]
+        ds = xr.open_mfdataset(files, combine='by_coords').sortby('time')
         # Normalise any 0-360 longitudes to -180/180
         ds = ensure_xy_dims(ds)
         if 'x' in ds.coords and float(ds.x.max()) > 180.0:
             ds = ds.assign_coords(x=((ds.x + 180.0) % 360.0 - 180.0)).sortby('x')
         return ds
 
+    def _load_one_year(nex_var, year):
+        """Open a single year file lazily (used for year-by-year ET₀ to limit peak RAM)."""
+        scen = _scenario_for_year(year, scenario)
+        path = os.path.join(target_dir, f"{nex_var}_{model}_{scen}_{year}.nc")
+        ds = xr.open_dataset(path)
+        ds = ensure_xy_dims(ds)
+        if 'x' in ds.coords and float(ds.x.max()) > 180.0:
+            ds = ds.assign_coords(x=((ds.x + 180.0) % 360.0 - 180.0)).sortby('x')
+        return ds
+
     # ------------------------------------------------------------------
-    # Step 3 – Process each requested output variable
+    # Step 3 – Process each requested output variable.
+    # All data is cast to float32 (raw NEX files are float32; Python float
+    # arithmetic would otherwise silently upcast to float64).
+    # ReferenceET is computed year-by-year to cap peak RAM: loading all 5
+    # input variables × all years at once is prohibitive for large domains.
     # ------------------------------------------------------------------
+    out_scenario = 'historical' if scenario == 'historical' else scenario
+
     for variable in variables:
 
         if variable in ('MinTemp', 'MaxTemp'):
             nex_var = _direct[variable]
             ds = _load_years(nex_var)
-            da = ds[nex_var] - 273.15          # K → °C
+            # np.float32 constant keeps subtraction in float32
+            da = ds[nex_var].astype(np.float32) - np.float32(273.15)
             da.attrs.update({'units': 'degC'})
             out = da.to_dataset(name=variable)
+            _preproc_and_save(out, variable, yearlist, basepath, to_match, model, out_scenario, ensemble)
+            ds.close()
 
         elif variable == 'Precipitation':
-            ds  = _load_years('pr')
-            da  = (ds['pr'] * 86400.0).clip(min=0.0)   # kg m⁻² s⁻¹ → mm day⁻¹
+            ds = _load_years('pr')
+            da = (ds['pr'].astype(np.float32) * np.float32(86400.0)).clip(min=np.float32(0.0))
             da.attrs.update({'units': 'mm/day'})
             out = da.to_dataset(name=variable)
+            _preproc_and_save(out, variable, yearlist, basepath, to_match, model, out_scenario, ensemble)
+            ds.close()
 
         elif variable == 'ReferenceET':
-            # Load the five ET₀ input variables
-            ds_tmin = _load_years('tasmin')
-            ds_tmax = _load_years('tasmax')
-            ds_hurs = _load_years('hurs')
-            ds_rsds = _load_years('rsds')
-            ds_wind = _load_years('sfcWind')
+            # Year-by-year: only 5 × 1-year float32 arrays (+intermediates) in RAM at once
+            print("        Computing ET₀ year-by-year to limit peak memory...")
+            et0_parts = []
+            for year in yearlist:
+                ds_tmin = _load_one_year('tasmin', year)
+                ds_tmax = _load_one_year('tasmax', year)
+                ds_hurs = _load_one_year('hurs',   year)
+                ds_rsds = _load_one_year('rsds',   year)
+                ds_wind = _load_one_year('sfcWind', year)
 
-            tasmin  = ds_tmin['tasmin'] - 273.15        # K → °C
-            tasmax  = ds_tmax['tasmax'] - 273.15        # K → °C
-            hurs    = ds_hurs['hurs']                   # [%]
-            rsds    = ds_rsds['rsds'] * 0.0864          # W m⁻² → MJ m⁻² day⁻¹
-            wind10m = ds_wind['sfcWind']                # m s⁻¹ at 10 m
+                et0_yr = _calc_et0_xr(
+                    ds_tmin['tasmin'].astype(np.float32) - np.float32(273.15),
+                    ds_tmax['tasmax'].astype(np.float32) - np.float32(273.15),
+                    ds_hurs['hurs'].astype(np.float32),
+                    ds_rsds['rsds'].astype(np.float32) * np.float32(0.0864),
+                    ds_wind['sfcWind'].astype(np.float32),
+                    elev=elev,
+                )
+                # Materialise and immediately release input file handles
+                et0_parts.append(et0_yr.load().astype(np.float32))
+                for _ds in [ds_tmin, ds_tmax, ds_hurs, ds_rsds, ds_wind]:
+                    _ds.close()
 
-            et0 = _calc_et0_xr(tasmin, tasmax, hurs, rsds, wind10m, elev=elev)
+            et0 = xr.concat(et0_parts, dim='time').sortby('time')
             out = et0.to_dataset(name='ReferenceET')
+            _preproc_and_save(out, variable, yearlist, basepath, to_match, model, out_scenario, ensemble)
 
         else:
             print(f"        WARNING: '{variable}' not recognised – skipping.")
-            continue
-
-        # Determine the effective scenario label for the output filename.
-        # If the period spans historical and SSP, use the SSP label so users
-        # know which projection was used for future years.
-        out_scenario = 'historical' if scenario == 'historical' else scenario
-
-        _preproc_and_save(
-            out, variable, yearlist, basepath, to_match,
-            model, out_scenario, ensemble,
-        )

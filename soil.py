@@ -1,19 +1,22 @@
-def soil(domain_path, res, basepath, templategrid_path):
+from owslib.wcs import WebCoverageService
+import os
+import geopandas as gpd
+from soilgrids import SoilGrids
+import glob
+import rioxarray
+import xarray as xr
+import numpy as np
+from preproc_tools import makedirs, safe_clip
 
-    from owslib.wcs import WebCoverageService
-    import os
-    import geopandas as gpd
-    from soilgrids import SoilGrids
-    import glob
-    import rioxarray
-    import xarray as xr
-    import numpy as np
+
+def soil(domain_path, res, basepath, templategrid_path, mask=None, to_match=None):
+
     #import pdb # pdb.set_trace()
-    from preproc_tools import makedirs, safe_clip
 
 
     ## Bounds from shapefile
-    mask = gpd.read_file(domain_path)
+    if mask is None:
+        mask = gpd.read_file(domain_path)
     xmin, ymin, xmax, ymax = mask.total_bounds # in lat/lon
     xmin = float(np.floor(xmin * (1/res)) / (1/res)) # round bounds down to cell resolution
     ymin = float(np.floor(ymin * (1/res)) / (1/res)) # round bounds down to cell resolution
@@ -24,8 +27,9 @@ def soil(domain_path, res, basepath, templategrid_path):
     h = round((ymax-ymin)/res)
     
     # Load template grid from single source of truth
-    to_match = xr.open_dataset(templategrid_path)
-    to_match.rio.write_crs(4326, inplace=True)
+    if to_match is None:
+        to_match = xr.open_dataset(templategrid_path)
+        to_match.rio.write_crs(4326, inplace=True)
 
     ## Download soil data from ISRIC Soil grids
     target_dir = makedirs(basepath, 'rawdata', 'soilgrids')
@@ -39,7 +43,18 @@ def soil(domain_path, res, basepath, templategrid_path):
     # Browsing through input soil maps
     for i in maps:
         print(i)
-        wcs = WebCoverageService('https://maps.isric.org/mapserv?map=/map/' + str(i) + '.map', version='2.0.1')
+        # Skip WCS query entirely if all depth layers for this soil type are already downloaded
+        existing_tifs = glob.glob(os.path.join(target_dir, i + '_*_mean.tif'))
+        if len(existing_tifs) >= 6:
+            print(f"             *** All {i} layers already downloaded, skipping WCS query ***")
+            continue
+
+        try:
+            wcs = WebCoverageService('https://maps.isric.org/mapserv?map=/map/' + str(i) + '.map', version='2.0.1')
+        except Exception as exc:
+            print("             *** WARNING: SoilGrids service query failed. ***")
+            print("             *** The ISRIC service is sometimes temporarily unresponsive. Please try running again. ***")
+            raise RuntimeError(f"SoilGrids query failed for '{i}'.") from exc
 
         # Choosing the mean layers
         names = [k for k in wcs.contents.keys() if k.endswith('mean')]
@@ -66,6 +81,10 @@ def soil(domain_path, res, basepath, templategrid_path):
                 width= w,
                 height= h,
                 output=  outfile)
+            if data is None and not os.path.isfile(outfile):
+                print("             *** WARNING: SoilGrids download did not return data. ***")
+                print("             *** The ISRIC service is sometimes temporarily unresponsive. Please try running again. ***")
+                raise RuntimeError(f"SoilGrids download failed for '{layer}'.")
 
 
     ## Convert soil layers to mosaics for each depth layer

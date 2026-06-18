@@ -1,19 +1,21 @@
-def cropcalendar(domain_path, basepath, referenceraster_path):
+import os
+import geopandas as gpd
+import glob
+import xarray as xr
+import rioxarray as rio
+from shapely.geometry import mapping
+from rasterio.warp import Resampling
+from preproc_tools import download_url, unzip_all, ensure_xy_dims, makedirs, safe_clip
 
-    import os
-    import geopandas as gpd
-    import glob
-    import xarray as xr
-    import rioxarray as rio
-    from shapely.geometry import mapping
-    from rasterio.warp import Resampling
-    from preproc_tools import download_url, unzip_all, ensure_xy_dims, makedirs, safe_clip
-    from xarray.coding.times import CFTimedeltaCoder
+
+def cropcalendar(domain_path, basepath, referenceraster_path, mask=None, to_match=None):
 
     # For reprojecting and clipping
-    mask = gpd.read_file(domain_path)
-    to_match = xr.open_dataset(referenceraster_path)
-    to_match.rio.write_crs(4326, inplace=True)
+    if mask is None:
+        mask = gpd.read_file(domain_path)
+    if to_match is None:
+        to_match = xr.open_dataset(referenceraster_path)
+        to_match.rio.write_crs(4326, inplace=True)
     
     print("        *** DOWNLOADING GGCMI CROP CALENDAR DATA ***")
     ## Download crop calendar dataset from GGCMI (Jägermeyr et al. 2021; https://zenodo.org/records/5062513)

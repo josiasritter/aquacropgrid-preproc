@@ -22,7 +22,6 @@ from preproc_tools import agera5_merge_yearly, preproc_agera5, basegrid, makedir
 
 import socket
 import requests
-import dns.resolver  # pip install dnspython
 
 # Set of functions to automatically overcome DNS-based errors, often found on university networks
 def force_resolve(ip, hostname="cds.climate.copernicus.eu"):
@@ -170,14 +169,13 @@ def climate_AgERA5(basepath, start_year, end_year, api_token, to_match, variable
             if not os.path.exists(yearfile):  # Skip unzipping and file merging if yearly .nc file already exists
                 agera5_merge_yearly(target_dir, yearfile)
 
-        # Combine yearly files into one
+        # Combine yearly files into one (yearly files stay on disk as resumable checkpoints)
         file_paths = [os.path.join(target_dir, variable + str(year) + '.nc') for year in yearlist]
-        datasets = [xr.open_dataset(f) for f in file_paths]
-        src = xr.concat(datasets, dim='time')
-        src = src.sortby('time')    # Make sure all is properly sorted along the time dimension
+        src = xr.open_mfdataset(file_paths, combine='by_coords').sortby('time')
 
         # Preprocessing
         preproc_agera5(src, variable, yearlist, basepath, to_match)
+        src.close()
 
     """
     ## DISABLED AS GRIDDED INITIAL SOIL WATER CONTENT IS CURRENTLY NOT SUPPORTED AS INPUT FOR SIMULATIONS.

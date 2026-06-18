@@ -14,6 +14,7 @@ from zipfile import ZipFile
 #import pdb # pdb.set_trace()
 
 import rioxarray
+import scipy.ndimage as ndi
 from shapely.geometry import mapping, box
 
 ## Download functions
@@ -52,9 +53,14 @@ def unzip_all(dir='.'):
                 os.remove(file)
 
 ## Preprocessing functions
-def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match):
-    mask = gpd.read_file(domain_path)
+def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to_match, mask=None):
+    if mask is None:
+        mask = gpd.read_file(domain_path)
     to_match.rio.write_crs(4326, inplace=True)
+
+    # Precompute output pixel size and domain bounds for efficient clipping
+    out_res = abs(float(to_match.rio.resolution()[0]))
+    xmin_dom, ymin_dom, xmax_dom, ymax_dom = mask.total_bounds
 
     # Dictionary that connects FAO crop ID's to crop names in AquaCrop. Used for layer naming
     crop_dict = {'BARL': 'Barley','COTT': 'Cotton','BEAN': 'DryBean','MAIZ': 'Maize','RICE': 'PaddyRice','POTA': 'Potato','SORG': 'Sorghum','SOYB': 'Soybean','SUGB': 'SugarBeet','SUGC': 'SugarCane','SUNF': 'Sunflower','CASS': 'Cassava'}    # Wheat removed as it is in SPAM data aggregated for winter and summer wheat and hence not useful for AquaCrop. 
@@ -83,17 +89,25 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
 
         # print(cropID, technique)
 
-        src = xr.load_dataset(layer)
-        src_proj = src.rio.reproject_match(to_match, resampling=Resampling.average) # changed from nearest-neighbor to area-weighted resampling to reduce distortions 
-        #src_clip = src_proj.rio.clip(mask.geometry.apply(mapping))
+        src = xr.open_dataset(layer)
+        src.rio.write_crs(4326, inplace=True)
+        # Actual input pixel size (e.g. 5 arcmin = 1/12°) for area scaling
+        src_res = abs(float(src.rio.resolution()[0]))
+        area_scale = (out_res / src_res) ** 2
+        # Coarse bbox clip for efficiency: shrinks global file to domain extent before reproject
+        buf = 0.5  # degree buffer to avoid edge effects during reprojection
+        src_bbox = src.rio.clip_box(xmin_dom - buf, ymin_dom - buf, xmax_dom + buf, ymax_dom + buf)
+        src_proj = src_bbox.rio.reproject_match(to_match, resampling=Resampling.average)  # area-weighted resampling
+        # Precise polygon clip for accuracy: respects domain outline at output resolution
         src_clip = safe_clip(src_proj, mask)
+        src.close()
 
         # Rename variables from FAO crop ID to crop strings used by AquaCrop
         layername_base = crop_dict.get(cropID) + '_' + tech_dict.get(technique)
 
-        # Change raster values due to resolution change from 5 arcmin to 3 arcmin for physical and harvested area and production rasters
+        # Scale area values by the actual output-to-input pixel-area ratio
         if (spam_variable == 'physical_area') | (spam_variable == 'harvested_area') | (spam_variable == 'production'):
-            src_clip[layername_base + '_' + spam_variable] = src_clip['band_data'] * 3**2 / 5**2 # TESTED FOR MEKONG: OVERALL CROP AREA FOR IRRIGATED RICE DECREASES BY ABOUT 1% -> negligible!
+            src_clip[layername_base + '_' + spam_variable] = src_clip['band_data'] * area_scale
             #src_clip[layer[-12: -4] + '_percentage'] = src_clip[layer[-12: -4] + '_area'] / meters.ha  # Percentage only needed to restrict model to cells with very small crop area
 
         # Renaming variable for yield and change from kg/ha to t/ha
@@ -115,7 +129,6 @@ def preproc_spam(basepath, download_dir, refyear, spam_variable, domain_path, to
 
 def spam_refyear(start_year, end_year):
     # Choose SPAM data reference year (available reference years are 2010 or 2020) according to average of start and end year of modelling horizon
-    import numpy as np
     avg_year = np.mean([start_year, end_year])
     avg_year = np.ceil(avg_year)
     SPAM_refyears = [2010, 2020]
@@ -151,8 +164,14 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     # Resample to project grid (before gap-filling to prevent ET0 NaNs)
     src_reproj = src.rio.reproject_match(to_match, resampling=Resampling.nearest)
 
+    # Cast to float32 before gap-fill: raw AgERA5 is float32; scalar ops (e.g. -273.15)
+    # silently upcast to float64, so we explicitly restore float32 here to halve
+    # the memory footprint of data3d for large domains.
+    for _v in list(src_reproj.data_vars):
+        if src_reproj[_v].dtype != np.float32:
+            src_reproj[_v] = src_reproj[_v].astype(np.float32)
+
     # Fill missing values in data variables (using nearest-neighbour interpolation)
-    import scipy.ndimage as ndi
     variables = list(src_reproj.data_vars)
     for variab in variables:    # Loop to make it work also for InitSoilwater data, which has four data variables (corresponding to four soil depths)
         data3d = src_reproj[variab].to_numpy()
@@ -173,27 +192,25 @@ def preproc_agera5(src, variable, yearlist, basepath, to_match):
     for var in src_masked.data_vars:             # ensure every data variable references the CRS (required by QGIS)
         src_masked[var].encoding.pop('grid_mapping', None)
         src_masked[var].attrs['grid_mapping'] = 'spatial_ref'
-    src_masked.to_netcdf(targetfile, mode='w', encoding={variables[0]: {'zlib': True, 'complevel': 4}})
+        if src_masked[var].dtype != np.float32:  # guarantee float32 output
+            src_masked[var] = src_masked[var].astype(np.float32)
+    encoding = {var: {'zlib': True, 'complevel': 4} for var in variables}
+    src_masked.to_netcdf(targetfile, mode='w', encoding=encoding)
 
 def agera5_merge_yearly(target_dir, yearfile):
-    import glob
     import shutil
-    unzip_all(target_dir) 
+    unzip_all(target_dir)
     yearfolder = os.path.splitext(yearfile)[0]
     nc_files = sorted(glob.glob(os.path.join(yearfolder, '*.nc')))
-    datasets = [xr.open_dataset(f) for f in nc_files]
-    combined = xr.concat(datasets, dim='time')
+    combined = xr.open_mfdataset(nc_files, combine='by_coords').load()  # load into RAM before closing files
     combined = combined.sortby('time')
     combined = combined.rio.write_crs(4326)      # adds spatial_ref coordinate with crs_wkt
     for var in combined.data_vars:               # ensure every data variable references the CRS (required by QGIS)
         combined[var].encoding.pop('grid_mapping', None)
         combined[var].attrs['grid_mapping'] = 'spatial_ref'
     combined.to_netcdf(yearfile)
-    
-    # Close all file handles before deleting
-    for ds in datasets:
-        ds.close()
-    
+    combined.close()
+
     shutil.rmtree(yearfolder)  # remove unzipped folder to save space
 
 
@@ -280,7 +297,7 @@ def basegrid(domain_shape_path, resolution, templategrid_path):    # Creates bas
     if not mask.crs.to_epsg() == 4326:
         raise Exception("The polygon file must be in EPSG:4326.")
 
-    full_geom = mask.unary_union
+    full_geom = mask.union_all()
     xmin, ymin, xmax, ymax = full_geom.bounds # in lat/lon
     xmin, ymin = np.floor(xmin * (1/resolution)) / (1/resolution) , np.floor(ymin * (1/resolution)) / (1/resolution) # round bounds down to cell resolution
     xmax, ymax = np.ceil(xmax * (1/resolution)) / (1/resolution) , np.ceil(ymax * (1/resolution)) / (1/resolution) # round upper bounds up to cell resolution
@@ -331,11 +348,7 @@ def ensure_xy_dims(ds):
     return ds
 
 def makedirs(basepath, level1, level2):
-    level1_dir = os.path.join(basepath, level1)
-    if not os.path.exists(level1_dir):
-        os.mkdir(level1_dir)
-    level2_dir = os.path.join(level1_dir, level2)
-    if not os.path.exists(level2_dir):
-        os.mkdir(level2_dir)
-    return level2_dir
+    path = os.path.join(basepath, level1, level2) if level2 else os.path.join(basepath, level1)
+    os.makedirs(path, exist_ok=True)
+    return path
 
