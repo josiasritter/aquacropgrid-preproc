@@ -30,7 +30,7 @@ domain_path = '/Users/ritterj1/PythonProjects/aquacropgrid-preproc/inputdata/ger
 start_year = 2030
 end_year = 2031
 cell_resolution = 0.05 # cell resolution in degrees (e.g. 0.05 for 3 arcmin). Resolution of 0.05 degrees is reasonable given the coarse spatial resolution of most input datasets.
-api_token = '0fe27966-2d39-4d7b-a4d4-f85f9539b548'  # your API token when using AgERA5 as climate input, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
+api_token = 'xxx'  # your API token when using AgERA5 as climate input, retrieved from your profile page on the Copernicus Climate Data Store (https://cds.climate.copernicus.eu/)
 
 # NASA NEX-GDDP-CMIP6 settings (used for climate projection inputs when end_year >= current year)
 nasanex_model    = 'GFDL-CM4'   # CMIP6 model; see https://ds.nccs.nasa.gov/thredds/catalog/AMES/NEX/GDDP-CMIP6/catalog.html
